@@ -1,0 +1,228 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { cn } from '@/lib/utils';
+import { adminApi } from '@/lib/api';
+import toast from 'react-hot-toast';
+import { ChevronDown, Loader2, Plus, Save, Search, Trash2, X } from 'lucide-react';
+
+interface Instrument { id: string; symbol: string; display_name: string; segment: string; segment_id: string | null; }
+interface ChargeRow {
+  scope: string;
+  instrument_id: string | null;
+  segment_id: string | null;
+  user_id: string | null;
+  charge_type: string;
+  value: number;
+  is_enabled: boolean;
+  _user_label?: string;
+}
+
+const CHARGE_TYPES = [
+  { value: 'commission_per_lot', label: 'Per Lot ($)' },
+  { value: 'commission_per_trade', label: 'Per Trade ($)' },
+  { value: 'spread_percentage', label: 'Spread %' },
+];
+
+export default function ChargesPage() {
+  const [instruments, setInstruments] = useState<Instrument[]>([]);
+  const [rows, setRows] = useState<ChargeRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const [userSearchIdx, setUserSearchIdx] = useState<number | null>(null);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userSearchResults, setUserSearchResults] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [instRes, chargeRes] = await Promise.all([
+        adminApi.get<{ items: Instrument[] }>('/config/instruments'),
+        adminApi.get<any[]>('/config/charges'),
+      ]);
+      setInstruments(instRes.items || []);
+      setRows((chargeRes || []).map((c: any) => ({
+        scope: c.scope,
+        instrument_id: c.instrument_id,
+        segment_id: c.segment_id,
+        user_id: c.user_id,
+        charge_type: c.charge_type,
+        value: c.value,
+        is_enabled: c.is_enabled,
+        _user_label: c.user_id ? `User ${c.user_id.slice(0, 8)}` : undefined,
+      })));
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const addRow = (scope: string) => {
+    setRows(prev => [...prev, {
+      scope, instrument_id: null, segment_id: null, user_id: null,
+      charge_type: 'commission_per_lot', value: 7, is_enabled: true,
+    }]);
+  };
+
+  const updateRow = (idx: number, field: string, val: any) => {
+    setRows(prev => prev.map((r, i) => {
+      if (i !== idx) return r;
+      const updated = { ...r, [field]: val };
+      if (field === 'instrument_id') {
+        const inst = instruments.find(x => x.id === val);
+        updated.segment_id = inst?.segment_id || null;
+      }
+      return updated;
+    }));
+  };
+
+  const removeRow = (idx: number) => setRows(prev => prev.filter((_, i) => i !== idx));
+
+  const searchUsers = async (q: string, idx: number) => {
+    setUserSearchQuery(q);
+    setUserSearchIdx(idx);
+    if (q.length < 2) { setUserSearchResults([]); return; }
+    setUserSearchLoading(true);
+    try {
+      const data = await adminApi.get<{ users: any[] }>('/users', { search: q, per_page: '8' });
+      setUserSearchResults((data.users || []).map((u: any) => ({ id: u.id, name: u.name, email: u.email })));
+    } catch {} finally { setUserSearchLoading(false); }
+  };
+
+  const selectUser = (idx: number, user: { id: string; name: string; email: string }) => {
+    updateRow(idx, 'user_id', user.id);
+    setRows(prev => prev.map((r, i) => i === idx ? { ...r, user_id: user.id, _user_label: `${user.name} (${user.email})` } : r));
+    setUserSearchIdx(null);
+    setUserSearchQuery('');
+    setUserSearchResults([]);
+  };
+
+  const saveAll = async () => {
+    setSaving(true);
+    try {
+      await adminApi.put('/config/charges', {
+        configs: rows.map(r => ({
+          scope: r.scope, instrument_id: r.instrument_id, segment_id: r.segment_id,
+          user_id: r.user_id, charge_type: r.charge_type, value: r.value, is_enabled: r.is_enabled,
+        })),
+      });
+      toast.success('Charges saved');
+      fetchData();
+    } catch (e: any) { toast.error(e.message || 'Save failed'); } finally { setSaving(false); }
+  };
+
+  if (loading) return <><div className="flex items-center justify-center h-96"><Loader2 size={20} className="animate-spin text-text-tertiary" /></div></>;
+
+  const globalRows = rows.filter(r => r.scope === 'default');
+  const instrumentRows = rows.filter(r => r.scope === 'instrument');
+  const userRows = rows.filter(r => r.scope === 'user');
+
+  const getRowIdx = (r: ChargeRow) => rows.indexOf(r);
+
+  function RuleTable({ title, items, scopeType }: { title: string; items: ChargeRow[]; scopeType: string }) {
+    return (
+      <div className="bg-bg-secondary border border-border-primary rounded-md">
+        <div className="px-4 py-2.5 border-b border-border-primary flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-text-primary">{title}</h3>
+          <button onClick={() => addRow(scopeType)} className="inline-flex items-center gap-1 px-2 py-1 text-xxs font-medium text-text-secondary border border-border-primary rounded hover:bg-bg-hover transition-fast">
+            <Plus size={11} /> Add
+          </button>
+        </div>
+        <div className="overflow-visible">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border-primary bg-bg-tertiary/40">
+                {(scopeType === 'instrument' ? ['Instrument'] : scopeType === 'user' ? ['User', 'Instrument'] : []).concat(['Charge Type', 'Value', 'On', '']).map(c => (
+                  <th key={c} className="text-left px-3 py-2 text-xxs font-medium text-text-tertiary uppercase tracking-wide">{c}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 ? (
+                <tr><td colSpan={6} className="px-4 py-6 text-center text-xxs text-text-tertiary">No rules. Click Add.</td></tr>
+              ) : items.map((r) => {
+                const idx = getRowIdx(r);
+                return (
+                  <tr key={idx} className="border-b border-border-primary/50 hover:bg-bg-hover/30">
+                    {scopeType === 'user' && (
+                      <td className="px-3 py-2">
+                        {r._user_label ? (
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-text-primary truncate max-w-[140px]">{r._user_label}</span>
+                            <button onClick={() => { updateRow(idx, 'user_id', null); setRows(prev => prev.map((x, i) => i === idx ? { ...x, _user_label: undefined } : x)); }} className="text-text-tertiary hover:text-danger"><X size={10} /></button>
+                          </div>
+                        ) : (
+                          <div className="relative">
+                            <input type="text" value={userSearchIdx === idx ? userSearchQuery : ''} onChange={e => searchUsers(e.target.value, idx)} onFocus={() => setUserSearchIdx(idx)} placeholder="Search user..." className="w-36 px-2 py-1 text-xxs bg-bg-input border border-border-primary rounded text-text-primary placeholder:text-text-tertiary" />
+                            {userSearchIdx === idx && userSearchResults.length > 0 && (
+                              <div className="absolute left-0 right-0 top-full mt-1 z-20 max-h-32 overflow-y-auto border border-border-primary rounded bg-bg-secondary shadow-dropdown">
+                                {userSearchResults.map(u => (
+                                  <button key={u.id} onClick={() => selectUser(idx, u)} className="w-full text-left px-2 py-1.5 text-xxs hover:bg-bg-hover border-b border-border-primary/50 last:border-0">
+                                    <span className="text-text-primary">{u.name}</span> <span className="text-text-tertiary">{u.email}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    )}
+                    {(scopeType === 'instrument' || scopeType === 'user') && (
+                      <td className="px-3 py-2">
+                        <select value={r.instrument_id || ''} onChange={e => updateRow(idx, 'instrument_id', e.target.value || null)} className="text-xs py-1 pl-2 pr-6 appearance-none bg-bg-input border border-border-primary rounded text-text-primary w-32">
+                          <option value="">All</option>
+                          {instruments.map(i => <option key={i.id} value={i.id}>{i.symbol}</option>)}
+                        </select>
+                      </td>
+                    )}
+                    <td className="px-3 py-2">
+                      <select value={r.charge_type} onChange={e => updateRow(idx, 'charge_type', e.target.value)} className="text-xs py-1 pl-2 pr-6 appearance-none bg-bg-input border border-border-primary rounded text-text-primary w-32">
+                        {CHARGE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-3 py-2">
+                      <input type="number" step="any" min="0" value={r.value} onChange={e => updateRow(idx, 'value', parseFloat(e.target.value) || 0)} className="w-20 px-2 py-1 text-xs bg-bg-input border border-border-primary rounded font-mono tabular-nums text-text-primary" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <button onClick={() => updateRow(idx, 'is_enabled', !r.is_enabled)} className={cn('w-8 h-4 rounded-full transition-fast relative', r.is_enabled ? 'bg-buy' : 'bg-bg-hover border border-border-primary')}>
+                        <span className={cn('absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-fast', r.is_enabled ? 'left-[16px]' : 'left-0.5')} />
+                      </button>
+                    </td>
+                    <td className="px-3 py-2">
+                      <button onClick={() => removeRow(idx)} className="p-1 text-text-tertiary hover:text-danger transition-fast"><Trash2 size={12} /></button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-semibold text-text-primary">Charges Configuration</h1>
+            <p className="text-xxs text-text-tertiary mt-0.5">Priority: User &gt; Instrument &gt; Default. Higher priority overrides lower.</p>
+          </div>
+          <button onClick={saveAll} disabled={saving} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-buy rounded-md hover:bg-buy-light disabled:opacity-50 transition-fast">
+            {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save All
+          </button>
+        </div>
+
+        <RuleTable title="Default (All Instruments)" items={globalRows} scopeType="default" />
+        <RuleTable title="Per Instrument" items={instrumentRows} scopeType="instrument" />
+        <RuleTable title="Per User (Override)" items={userRows} scopeType="user" />
+      </div>
+    </>
+  );
+}

@@ -1,0 +1,162 @@
+from datetime import datetime, timedelta, date
+
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..database import get_db
+from ..dependencies import get_current_admin, require_permission
+from ..models import User, Position, Deposit, Withdrawal, Transaction, SupportTicket, PositionStatus
+from ..schemas import DashboardStats, DashboardRevenueSeries, DashboardRevenuePoint
+
+router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+
+
+@router.get("/stats", response_model=DashboardStats)
+async def get_dashboard_stats(
+    admin: User = Depends(require_permission("analytics.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    total_users_q = await db.execute(
+        select(func.count(User.id)).where(User.role == "user")
+    )
+    total_users = total_users_q.scalar() or 0
+
+    active_traders_q = await db.execute(
+        select(func.count(func.distinct(Position.account_id))).where(
+            Position.status == PositionStatus.OPEN.value
+        )
+    )
+    active_traders = active_traders_q.scalar() or 0
+
+    deposits_today_q = await db.execute(
+        select(func.coalesce(func.sum(Deposit.amount), 0)).where(
+            Deposit.status.in_(["approved", "auto_approved"]),
+            Deposit.created_at >= today_start,
+        )
+    )
+    deposits_today = float(deposits_today_q.scalar() or 0)
+
+    withdrawals_today_q = await db.execute(
+        select(func.coalesce(func.sum(Withdrawal.amount), 0)).where(
+            Withdrawal.status.in_(["approved", "completed"]),
+            Withdrawal.created_at >= today_start,
+        )
+    )
+    withdrawals_today = float(withdrawals_today_q.scalar() or 0)
+
+    pnl_q = await db.execute(
+        select(func.coalesce(func.sum(Position.profit), 0)).where(
+            Position.status == PositionStatus.CLOSED.value,
+            Position.closed_at >= today_start,
+        )
+    )
+    user_pnl = float(pnl_q.scalar() or 0)
+    platform_pnl = -user_pnl
+
+    commission_q = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount), 0)).where(
+            Transaction.type == "commission",
+            Transaction.created_at >= today_start,
+        )
+    )
+    commission_paid = float(commission_q.scalar() or 0)
+
+    pending_deposits_q = await db.execute(
+        select(func.count(Deposit.id)).where(Deposit.status == "pending")
+    )
+    pending_deposits_count = pending_deposits_q.scalar() or 0
+
+    open_tickets_q = await db.execute(
+        select(func.count(SupportTicket.id)).where(
+            SupportTicket.status.in_(["open", "in_progress"])
+        )
+    )
+    open_tickets_count = open_tickets_q.scalar() or 0
+
+    return DashboardStats(
+        total_users=total_users,
+        active_traders=active_traders,
+        deposits_today=deposits_today,
+        withdrawals_today=withdrawals_today,
+        platform_pnl=platform_pnl,
+        commission_paid=commission_paid,
+        pending_deposits_count=pending_deposits_count,
+        open_tickets_count=open_tickets_count,
+    )
+
+
+@router.get("/revenue", response_model=DashboardRevenueSeries)
+async def dashboard_revenue_series(
+    days: int = Query(30, ge=7, le=90),
+    admin: User = Depends(require_permission("analytics.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Daily approved deposit totals and completed withdrawals for the chart."""
+    end_d: date = datetime.utcnow().date()
+    start_d: date = end_d - timedelta(days=days - 1)
+    cutoff = datetime.combine(start_d, datetime.min.time())
+
+    day_bucket = func.date_trunc("day", Deposit.created_at)
+    dep_rows = (
+        await db.execute(
+            select(day_bucket, func.coalesce(func.sum(Deposit.amount), 0))
+            .where(
+                Deposit.status.in_(["approved", "auto_approved"]),
+                Deposit.created_at >= cutoff,
+            )
+            .group_by(day_bucket)
+            .order_by(day_bucket)
+        )
+    ).all()
+
+    w_bucket = func.date_trunc("day", Withdrawal.created_at)
+    w_rows = (
+        await db.execute(
+            select(w_bucket, func.coalesce(func.sum(Withdrawal.amount), 0))
+            .where(
+                Withdrawal.status.in_(["approved", "completed"]),
+                Withdrawal.created_at >= cutoff,
+            )
+            .group_by(w_bucket)
+            .order_by(w_bucket)
+        )
+    ).all()
+
+    by_day: dict[str, tuple[float, float]] = {}
+
+    def _add_dep(row):
+        bkt, total = row[0], float(row[1] or 0)
+        k = bkt.date().isoformat() if hasattr(bkt, "date") else str(bkt)[:10]
+        d, w = by_day.get(k, (0.0, 0.0))
+        by_day[k] = (d + total, w)
+
+    def _add_w(row):
+        bkt, total = row[0], float(row[1] or 0)
+        k = bkt.date().isoformat() if hasattr(bkt, "date") else str(bkt)[:10]
+        d, w = by_day.get(k, (0.0, 0.0))
+        by_day[k] = (d, w + total)
+
+    for row in dep_rows:
+        _add_dep(row)
+    for row in w_rows:
+        _add_w(row)
+
+    points: list[DashboardRevenuePoint] = []
+    cur = start_d
+    while cur <= end_d:
+        key = cur.isoformat()
+        dep_amt, wdr_amt = by_day.get(key, (0.0, 0.0))
+        points.append(
+            DashboardRevenuePoint(
+                date=key,
+                deposits=dep_amt,
+                withdrawals=wdr_amt,
+                net=dep_amt - wdr_amt,
+            )
+        )
+        cur += timedelta(days=1)
+
+    return DashboardRevenueSeries(points=points)
