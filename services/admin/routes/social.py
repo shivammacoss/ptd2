@@ -8,13 +8,13 @@ from typing import Optional
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import get_db
-from ..dependencies import require_permission, write_audit_log
-from ..models import (
+from database import get_db
+from dependencies import require_permission, write_audit_log
+from models import (
     User, MasterAccount, TradingAccount, InvestorAllocation,
     CopyTrade, TradeHistory, Transaction, Position,
 )
-from ..schemas import PaginatedResponse
+from schemas import PaginatedResponse
 
 router = APIRouter(prefix="/social", tags=["Social Trading"])
 

@@ -35,16 +35,20 @@ interface StatCardProps {
 
 export function StatCard({ label, value, subValue, trend, className }: StatCardProps) {
   return (
-    <Card variant="glass" className={clsx('noise-texture overflow-hidden', className)}>
-      <div className="relative z-10">
-        <div className="text-xs text-text-secondary mb-1.5">{label}</div>
+    <Card variant="glass" padding="none" className={clsx('noise-texture overflow-hidden p-2.5 sm:p-3 md:p-4', className)}>
+      <div className="relative z-10 min-w-0">
+        <div className="text-[10px] sm:text-xs text-text-secondary mb-1 leading-tight line-clamp-2">{label}</div>
         <div className={clsx(
-          'text-xl font-bold tabular-nums font-mono',
+          'text-base sm:text-lg md:text-xl font-bold tabular-nums font-mono leading-tight break-words',
           trend === 'up' ? 'text-buy' : trend === 'down' ? 'text-sell' : 'text-text-primary'
         )}>
           {value}
         </div>
-        {subValue && <div className="text-xxs text-text-tertiary mt-1">{subValue}</div>}
+        {subValue && (
+          <div className="text-[9px] sm:text-xxs text-text-tertiary mt-1 leading-snug line-clamp-2 break-words">
+            {subValue}
+          </div>
+        )}
       </div>
     </Card>
   );

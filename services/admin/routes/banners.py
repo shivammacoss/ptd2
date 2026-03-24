@@ -5,10 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import get_db
-from ..dependencies import get_current_admin, require_permission, write_audit_log
-from ..models import User, Banner
-from ..schemas import BannerIn, BannerOut
+from database import get_db
+from dependencies import get_current_admin, require_permission, write_audit_log
+from models import User, Banner
+from schemas import BannerIn, BannerOut
 
 router = APIRouter(prefix="/banners", tags=["Banners"])
 

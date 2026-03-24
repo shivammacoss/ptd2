@@ -2,7 +2,10 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { clsx } from 'clsx';
 import { useUIStore } from '@/stores/uiStore';
+import { useTradingStore, InstrumentInfo } from '@/stores/tradingStore';
 import Watchlist from '@/components/trading/Watchlist';
 import OrderPanel from '@/components/trading/OrderPanel';
 import PositionsPanel from '@/components/trading/PositionsPanel';
@@ -76,6 +79,7 @@ function DragHandleH({ onDrag }: { onDrag: (deltaY: number) => void }) {
 }
 
 export default function TradingPage() {
+  const router = useRouter();
   const {
     watchlistWidth, orderPanelWidth, bottomPanelHeight,
     setWatchlistWidth, setOrderPanelWidth, setBottomPanelHeight
@@ -85,7 +89,12 @@ export default function TradingPage() {
   const [opW, setOpW] = useState(orderPanelWidth);
   const [bpH, setBpH] = useState(bottomPanelHeight);
   const [isMobile, setIsMobile] = useState(false);
-  const [mobilePanel, setMobilePanel] = useState<'chart' | 'watchlist' | 'order'>('chart');
+  const [lotSize, setLotSize] = useState('0.01');
+  const [chartTabs, setChartTabs] = useState<string[]>([]);
+  
+  const { selectedSymbol, prices, instruments, watchlist, setSelectedSymbol } = useTradingStore();
+  const searchParams = useSearchParams();
+  const mobileView = searchParams.get('view') || 'watchlist';
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -94,43 +103,116 @@ export default function TradingPage() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  const wlStartRef = useState(wlW);
-  const opStartRef = useState(opW);
-  const bpStartRef = useState(bpH);
+  // Sync selected symbol with tabs
+  useEffect(() => {
+    if (selectedSymbol && !chartTabs.includes(selectedSymbol)) {
+      setChartTabs(prev => [...prev, selectedSymbol]);
+    }
+  }, [selectedSymbol, chartTabs]);
 
-  const handleWlDragStart = useCallback(() => {
-    return wlW;
-  }, [wlW]);
-
-  const handleOpDragStart = useCallback(() => {
-    return opW;
-  }, [opW]);
+  const removeTab = (e: React.MouseEvent, symbol: string) => {
+    e.stopPropagation();
+    const nextTabs = chartTabs.filter(s => s !== symbol);
+    setChartTabs(nextTabs);
+    if (selectedSymbol === symbol && nextTabs.length > 0) {
+      setSelectedSymbol(nextTabs[nextTabs.length - 1]);
+    }
+  };
 
   if (isMobile) {
+    const digits = instruments.find((i: InstrumentInfo) => i.symbol === selectedSymbol)?.digits ?? 5;
+    const price = prices[selectedSymbol];
+
+    const handleLotChange = (val: number) => {
+      const current = parseFloat(lotSize);
+      const next = Math.max(0.01, current + val).toFixed(2);
+      setLotSize(next);
+    };
+
     return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-hidden">
-          {mobilePanel === 'chart' && <TradingViewChart />}
-          {mobilePanel === 'watchlist' && <Watchlist />}
-          {mobilePanel === 'order' && <OrderPanel />}
-        </div>
-        <div className="h-14 glass-heavy border-t border-border-glass flex items-center justify-around shrink-0">
-          {([
-            { id: 'watchlist' as const, label: 'Markets', icon: '◈' },
-            { id: 'chart' as const, label: 'Chart', icon: '◆' },
-            { id: 'order' as const, label: 'Trade', icon: '⚡' },
-          ]).map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setMobilePanel(item.id)}
-              className={`flex flex-col items-center gap-0.5 px-4 py-1 rounded-lg transition-fast ${
-                mobilePanel === item.id ? 'text-buy' : 'text-text-tertiary'
-              }`}
-            >
-              <span className="text-lg">{item.icon}</span>
-              <span className="text-xxs">{item.label}</span>
-            </button>
-          ))}
+      <div className="flex-1 flex flex-col overflow-hidden bg-bg-primary">
+        <div className="flex-1 overflow-hidden relative">
+          {mobileView === 'watchlist' && <Watchlist />}
+          {mobileView === 'chart' && (
+            <div className="h-full flex flex-col">
+              {/* Dynamic Chart Tabs Header */}
+              <div className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border-b border-border-glass overflow-x-auto no-scrollbar scrollbar-none">
+                {chartTabs.map((symbol) => (
+                  <button
+                    key={symbol}
+                    onClick={() => setSelectedSymbol(symbol)}
+                    className={clsx(
+                      'px-4 py-1.5 rounded-xl text-xs font-extrabold transition-all border whitespace-nowrap flex items-center gap-2 group',
+                      symbol === selectedSymbol
+                        ? 'bg-bg-primary text-text-primary border-border-glass shadow-sm'
+                        : 'bg-transparent text-text-tertiary border-transparent hover:text-text-primary'
+                    )}
+                  >
+                    {symbol}
+                    <div 
+                      onClick={(e) => removeTab(e, symbol)}
+                      className="p-0.5 rounded-md hover:bg-sell/10 hover:text-sell transition-colors opacity-60 group-hover:opacity-100"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </div>
+                  </button>
+                ))}
+                
+                <button 
+                  onClick={() => router.push('/trading?view=watchlist')}
+                  className="shrink-0 w-10 h-[34px] flex items-center justify-center rounded-xl bg-bg-hover/80 text-text-primary border border-border-glass hover:bg-buy/10 transition-all active:scale-95"
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-hidden relative">
+                <TradingViewChart />
+              </div>
+              
+              {/* Refined Quick Trade Bottom Bar */}
+              <div className="fixed bottom-[max(3.5rem,env(safe-area-inset-bottom,0px))] left-0 right-0 p-3 bg-bg-secondary/95 backdrop-blur-xl border-t border-border-glass z-50">
+                <div className="flex items-center justify-between mt-1">
+                   <div className="flex flex-col">
+                      <span className="text-[10px] font-bold text-text-tertiary uppercase tracking-wider leading-none mb-1.5">Lot Size</span>
+                      <div className="flex items-center gap-2">
+                         <button 
+                           onClick={() => handleLotChange(-0.01)}
+                           className="w-10 h-10 flex items-center justify-center rounded-xl bg-bg-primary border border-border-glass text-text-primary shadow-sm active:scale-90 transition-transform"
+                         >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12h14"/></svg>
+                         </button>
+                         <input 
+                           type="text" 
+                           value={lotSize}
+                           readOnly 
+                           className="w-14 h-10 text-[16px] font-black font-mono text-center bg-transparent text-text-primary outline-none" 
+                         />
+                         <button 
+                           onClick={() => handleLotChange(0.01)}
+                           className="w-10 h-10 flex items-center justify-center rounded-xl bg-bg-primary border border-border-glass text-text-primary shadow-sm active:scale-90 transition-transform"
+                         >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
+                         </button>
+                      </div>
+                   </div>
+
+                   <div className="flex items-center gap-2 flex-1 ml-4 h-[50px]">
+                      <button className="flex-1 h-full bg-sell rounded-xl flex flex-col items-center justify-center shadow-lg shadow-sell/20 active:scale-[0.98] transition-all">
+                        <span className="text-white text-[15px] font-black uppercase tracking-[0.05em]">Sell</span>
+                        <span className="text-white/70 text-[10px] font-mono font-bold leading-tight">{price?.bid.toFixed(digits) || '--'}</span>
+                      </button>
+                      
+                      <button className="flex-1 h-full bg-buy rounded-xl flex flex-col items-center justify-center shadow-lg shadow-buy/20 active:scale-[0.98] transition-all">
+                        <span className="text-white text-[15px] font-black uppercase tracking-[0.05em]">Buy</span>
+                        <span className="text-white/70 text-[10px] font-mono font-bold leading-tight">{price?.ask.toFixed(digits) || '--'}</span>
+                      </button>
+                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {mobileView === 'order' && <PositionsPanel />}
         </div>
       </div>
     );

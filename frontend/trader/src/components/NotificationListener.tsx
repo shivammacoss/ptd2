@@ -89,8 +89,9 @@ export function NotificationBell() {
   return (
     <div className="relative">
       <button
+        type="button"
         onClick={() => setOpen(v => !v)}
-        className="relative w-9 h-9 rounded-full glass-card flex items-center justify-center text-text-secondary hover:text-text-primary transition-fast"
+        className="relative min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 w-11 h-11 sm:w-9 sm:h-9 rounded-full glass-card flex items-center justify-center text-text-secondary hover:text-text-primary transition-fast"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
@@ -105,7 +106,7 @@ export function NotificationBell() {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-80 max-h-96 overflow-hidden rounded-xl border border-border-glass bg-bg-secondary shadow-lg z-50 flex flex-col">
+          <div className="fixed inset-x-3 top-16 sm:absolute sm:inset-x-auto sm:left-auto sm:right-0 sm:top-full sm:mt-2 w-auto sm:w-80 max-h-[min(70vh,24rem)] sm:max-h-96 overflow-hidden rounded-xl border border-border-glass bg-bg-secondary shadow-lg z-50 flex flex-col">
             <div className="flex items-center justify-between px-3 py-2 border-b border-border-glass">
               <span className="text-xs font-bold text-text-primary">Notifications</span>
               {unreadCount > 0 && (

@@ -89,6 +89,16 @@ interface TradingState {
   removePosition: (id: string) => void;
   refreshPositions: () => Promise<void>;
   refreshAccount: () => Promise<void>;
+  placeOrder: (data: {
+    account_id: string;
+    symbol: string;
+    side: 'buy' | 'sell';
+    order_type: 'market' | 'pending';
+    lots: number;
+    price?: number;
+    stop_loss?: number;
+    take_profit?: number;
+  }) => Promise<any>;
 }
 
 const DEFAULT_WATCHLIST = [
@@ -190,4 +200,27 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
   removeFromWatchlist: (s) => set((st) => ({
     watchlist: st.watchlist.filter((x) => x !== s),
   })),
+
+  placeOrder: async (data) => {
+    try {
+      const res = await api.post<any>('/orders/', {
+        account_id: data.account_id,
+        symbol: data.symbol,
+        side: data.side,
+        order_type: data.order_type,
+        lots: data.lots,
+        price: data.price,
+        stop_loss: data.stop_loss,
+        take_profit: data.take_profit,
+      });
+
+      // Refresh data after successful order
+      await get().refreshPositions();
+      await get().refreshAccount();
+      
+      return res;
+    } catch (err) {
+      throw err;
+    }
+  },
 }));

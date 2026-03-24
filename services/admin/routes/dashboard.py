@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import get_db
-from ..dependencies import get_current_admin, require_permission
-from ..models import User, Position, Deposit, Withdrawal, Transaction, SupportTicket, PositionStatus
-from ..schemas import DashboardStats, DashboardRevenueSeries, DashboardRevenuePoint
+from database import get_db
+from dependencies import get_current_admin, require_permission
+from models import User, Position, Deposit, Withdrawal, Transaction, SupportTicket, PositionStatus
+from schemas import DashboardStats, DashboardRevenueSeries, DashboardRevenuePoint
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 

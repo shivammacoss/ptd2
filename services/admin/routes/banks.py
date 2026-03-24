@@ -8,10 +8,10 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import get_db
-from ..dependencies import get_current_admin, require_permission, write_audit_log
-from ..models import User, BankAccount
-from ..schemas import BankAccountIn, BankAccountOut
+from database import get_db
+from dependencies import get_current_admin, require_permission, write_audit_log
+from models import User, BankAccount
+from schemas import BankAccountIn, BankAccountOut
 
 router = APIRouter(prefix="/banks", tags=["Banks"])
 

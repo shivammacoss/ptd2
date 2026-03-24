@@ -140,7 +140,7 @@ export default function TradingLayout({ children }: { children: React.ReactNode 
       const afterIds = new Set(after.map(p => p.id));
 
       if (beforeIds.size > 0) {
-        for (const id of beforeIds) {
+        beforeIds.forEach((id) => {
           if (!afterIds.has(id)) {
             const closed = before.find(p => p.id === id);
             if (closed) {
@@ -164,7 +164,7 @@ export default function TradingLayout({ children }: { children: React.ReactNode 
               );
             }
           }
-        }
+        });
       }
     }, 3000);
 
@@ -176,9 +176,9 @@ export default function TradingLayout({ children }: { children: React.ReactNode 
   }, []);
 
   return (
-    <div className="trading-page flex flex-col bg-bg-base">
+    <div className="trading-page flex flex-col h-[100dvh] pb-16 md:h-screen md:pb-0 bg-bg-base min-h-0">
       <TopBar />
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {children}
       </div>
     </div>

@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import get_db
-from ..dependencies import get_current_admin, require_permission, write_audit_log
-from ..models import User, ChargeConfig, SpreadConfig, SwapConfig, Instrument, InstrumentSegment
-from ..schemas import (
+from database import get_db
+from dependencies import get_current_admin, require_permission, write_audit_log
+from models import User, ChargeConfig, SpreadConfig, SwapConfig, Instrument, InstrumentSegment
+from schemas import (
     ChargeConfigOut, SpreadConfigOut, SwapConfigOut,
     BulkChargeUpdate, BulkSpreadUpdate, BulkSwapUpdate,
 )

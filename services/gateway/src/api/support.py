@@ -39,7 +39,7 @@ async def list_tickets(
     count_result = await db.execute(
         select(func.count()).select_from(SupportTicket).where(*base_filter)
     )
-    total = count_result.scalar()
+    total = count_result.scalar() or 0
 
     result = await db.execute(
         select(SupportTicket)
@@ -50,19 +50,24 @@ async def list_tickets(
     )
     tickets = result.scalars().all()
 
+    ticket_ids = [t.id for t in tickets]
+    counts = {}
+    if ticket_ids:
+        cnt_rows = await db.execute(
+            select(TicketMessage.ticket_id, func.count(TicketMessage.id))
+            .where(TicketMessage.ticket_id.in_(ticket_ids))
+            .group_by(TicketMessage.ticket_id)
+        )
+        counts = {row[0]: int(row[1]) for row in cnt_rows.all()}
+
     items = []
     for t in tickets:
-        msg_count = await db.execute(
-            select(func.count()).select_from(TicketMessage).where(
-                TicketMessage.ticket_id == t.id,
-            )
-        )
         items.append({
             "id": str(t.id),
             "subject": t.subject,
             "status": t.status,
             "priority": t.priority,
-            "message_count": msg_count.scalar(),
+            "message_count": counts.get(t.id, 0),
             "created_at": t.created_at.isoformat() if t.created_at else None,
             "updated_at": t.updated_at.isoformat() if t.updated_at else None,
         })
@@ -131,24 +136,6 @@ async def get_ticket(
     ticket = result.scalar_one_or_none()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
-
-    messages_result = await db.execute(
-        select(TicketMessage)
-        .where(
-            TicketMessage.ticket_id == ticket_id,
-            TicketMessage.is_admin == False,
-        )
-        .order_by(TicketMessage.created_at.asc())
-    )
-
-    admin_msgs_result = await db.execute(
-        select(TicketMessage)
-        .where(
-            TicketMessage.ticket_id == ticket_id,
-            TicketMessage.is_admin == True,
-        )
-        .order_by(TicketMessage.created_at.asc())
-    )
 
     all_messages_result = await db.execute(
         select(TicketMessage)

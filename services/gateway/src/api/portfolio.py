@@ -2,7 +2,7 @@
 import csv
 import io
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
 
@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func, and_, case
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from packages.common.src.database import get_db
 from packages.common.src.models import (
@@ -51,7 +52,20 @@ async def portfolio_summary(
 ):
     accounts = await _get_user_accounts(current_user["user_id"], db)
     if not accounts:
-        raise HTTPException(status_code=404, detail="No trading accounts found")
+        return {
+            "total_balance": 0.0,
+            "total_credit": 0.0,
+            "total_equity": 0.0,
+            "total_unrealized_pnl": 0.0,
+            "pnl_breakdown": {
+                "today": 0.0,
+                "this_week": 0.0,
+                "this_month": 0.0,
+                "all_time": 0.0,
+            },
+            "holdings": [],
+            "open_positions_count": 0,
+        }
 
     account_ids = [a.id for a in accounts]
     if account_id:
@@ -109,7 +123,7 @@ async def portfolio_summary(
         h["unrealized_pnl"] = float(h["unrealized_pnl"])
         del h["_price_sum"]
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = now - timedelta(days=now.weekday())
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -153,7 +167,22 @@ async def portfolio_performance(
 ):
     accounts = await _get_user_accounts(current_user["user_id"], db)
     if not accounts:
-        raise HTTPException(status_code=404, detail="No trading accounts found")
+        return {
+            "equity_curve": [],
+            "stats": {
+                "total_return": 0.0,
+                "total_return_pct": 0.0,
+                "max_drawdown": 0.0,
+                "max_drawdown_pct": 0.0,
+                "sharpe_ratio": 0.0,
+                "win_rate": 0.0,
+                "total_trades": 0,
+                "total_wins": 0,
+                "total_losses": 0,
+            },
+            "monthly_breakdown": [],
+            "symbol_breakdown": [],
+        }
 
     account_ids = [a.id for a in accounts]
     if account_id:
@@ -161,7 +190,7 @@ async def portfolio_performance(
             raise HTTPException(status_code=404, detail="Account not found")
         account_ids = [account_id]
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     period_map = {
         "1m": timedelta(days=30),
         "3m": timedelta(days=90),
@@ -171,7 +200,11 @@ async def portfolio_performance(
     }
     since = (now - period_map[period]) if period_map[period] else None
 
-    query = select(TradeHistory).where(TradeHistory.account_id.in_(account_ids))
+    query = (
+        select(TradeHistory)
+        .options(selectinload(TradeHistory.instrument))
+        .where(TradeHistory.account_id.in_(account_ids))
+    )
     if since:
         query = query.where(TradeHistory.closed_at >= since)
     query = query.order_by(TradeHistory.closed_at.asc())

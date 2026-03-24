@@ -6,10 +6,10 @@ from passlib.context import CryptContext
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import get_db
-from ..dependencies import get_current_admin, write_audit_log
-from ..models import User, Employee, AuditLog
-from ..schemas import EmployeeIn, EmployeeUpdate, EmployeeOut, AuditLogOut, PaginatedResponse
+from database import get_db
+from dependencies import get_current_admin, write_audit_log
+from models import User, Employee, AuditLog
+from schemas import EmployeeIn, EmployeeUpdate, EmployeeOut, AuditLogOut, PaginatedResponse
 
 router = APIRouter(prefix="/employees", tags=["Employees"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -240,7 +240,7 @@ async def login_as_employee(
     if not user:
         raise HTTPException(status_code=404, detail="Employee user not found")
 
-    from ..config import get_settings
+    from config import get_settings
     from jose import jwt
     settings = get_settings()
 

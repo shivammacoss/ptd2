@@ -5,10 +5,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import get_db
-from ..dependencies import require_permission
-from ..models import User, TradingAccount, Transaction
-from ..schemas import PaginatedResponse, AdminTransactionOut
+from database import get_db
+from dependencies import require_permission
+from models import User, TradingAccount, Transaction
+from schemas import PaginatedResponse, AdminTransactionOut
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
 

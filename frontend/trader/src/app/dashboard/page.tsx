@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { clsx } from 'clsx';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { StatCard } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import TopBar from '@/components/layout/TopBar';
-import api from '@/lib/api/client';
+import api, { ApiRequestCancelledError } from '@/lib/api/client';
 
 interface Account {
   id: string;
@@ -85,6 +85,22 @@ function timeAgo(dateStr: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+function emptyPortfolio(): PortfolioSummary {
+  return {
+    total_balance: 0,
+    total_credit: 0,
+    total_equity: 0,
+    total_unrealized_pnl: 0,
+    pnl_breakdown: { today: 0, this_week: 0, this_month: 0, all_time: 0 },
+    holdings: [],
+    open_positions_count: 0,
+  };
+}
+
+/** Core dashboard — fail fast enough to show errors; cold Docker still gets 30s. */
+const CORE_TIMEOUT_MS = 30_000;
+const EXTRAS_TIMEOUT_MS = 20_000;
+
 export default function DashboardPage() {
   const [greeting] = useState(() => {
     const h = new Date().getHours();
@@ -97,39 +113,93 @@ export default function DashboardPage() {
   const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [extrasLoading, setExtrasLoading] = useState(false);
+  const loadGen = useRef(0);
 
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const [acctsRes, port, notifs, bannerRes] = await Promise.all([
-        api.get<any>('/accounts'),
-        api.get<PortfolioSummary>('/portfolio/summary'),
-        api.get<{ items: Notification[] }>('/notifications', { per_page: '5' }),
-        api.get<{ banners: Banner[] }>('/banners', { page: 'dashboard' }),
-      ]);
-      const accts = Array.isArray(acctsRes) ? acctsRes : (acctsRes?.items ?? []);
-      setAccounts(accts);
-      setPortfolio(port);
-      setNotifications(notifs.items ?? []);
-      setBanners(bannerRes.banners ?? []);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to load dashboard';
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setLoading(false);
-    }
+  const fetchExtras = useCallback((generation: number, signal?: AbortSignal) => {
+    setExtrasLoading(true);
+    Promise.allSettled([
+      api.get<{ items: Notification[] }>('/notifications', { per_page: '5' }, { timeoutMs: EXTRAS_TIMEOUT_MS, signal }),
+      api.get<{ banners: Banner[] }>('/banners', { page: 'dashboard' }, { timeoutMs: EXTRAS_TIMEOUT_MS, signal }),
+    ])
+      .then((settled) => {
+        if (generation !== loadGen.current) return;
+        if (settled[0].status === 'fulfilled') {
+          setNotifications(settled[0].value.items ?? []);
+        }
+        if (settled[1].status === 'fulfilled') {
+          setBanners(settled[1].value.banners ?? []);
+        }
+      })
+      .finally(() => {
+        if (generation === loadGen.current) setExtrasLoading(false);
+      });
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const fetchData = useCallback(async (signal?: AbortSignal) => {
+    const id = ++loadGen.current;
+    setLoading(true);
+    setError(null);
+    setNotifications([]);
+    setBanners([]);
+
+    const core = await Promise.allSettled([
+      api.get<any>('/accounts', undefined, { timeoutMs: CORE_TIMEOUT_MS, signal }),
+      api.get<PortfolioSummary>('/portfolio/summary', undefined, { timeoutMs: CORE_TIMEOUT_MS, signal }),
+    ]);
+
+    if (id !== loadGen.current) return;
+
+    const errs: string[] = [];
+    let accts: Account[] = [];
+    let port: PortfolioSummary | null = null;
+
+    if (core[0].status === 'fulfilled') {
+      const acctsRes = core[0].value;
+      accts = Array.isArray(acctsRes) ? acctsRes : (acctsRes?.items ?? []);
+    } else if (core[0].status === 'rejected' && !(core[0].reason instanceof ApiRequestCancelledError)) {
+      errs.push(core[0].reason instanceof Error ? core[0].reason.message : 'Accounts failed');
+    }
+
+    if (core[1].status === 'fulfilled') {
+      port = core[1].value;
+    } else if (core[1].status === 'rejected' && !(core[1].reason instanceof ApiRequestCancelledError)) {
+      errs.push(core[1].reason instanceof Error ? core[1].reason.message : 'Portfolio failed');
+      port = emptyPortfolio();
+    } else if (core[1].status === 'rejected') {
+      port = emptyPortfolio();
+    }
+
+    setAccounts(accts);
+    setPortfolio(port);
+
+    if (errs.length === 2) {
+      const msg = errs[0] || 'Failed to load dashboard';
+      setError(msg);
+      toast.error(msg, { id: 'dashboard-load' });
+      setLoading(false);
+      return;
+    }
+
+    setLoading(false);
+    fetchExtras(id, signal);
+  }, [fetchExtras]);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    void fetchData(ac.signal);
+    return () => {
+      ac.abort();
+      loadGen.current += 1;
+    };
+  }, [fetchData]);
 
   const primaryAccount = accounts[0];
   const pnlToday = portfolio?.pnl_breakdown?.today ?? 0;
 
   if (loading) {
     return (
-      <div className="flex flex-col h-screen bg-bg-primary">
+      <div className="flex flex-col h-[100dvh] pb-16 md:h-screen md:pb-0 bg-bg-primary">
         <TopBar />
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
@@ -143,12 +213,12 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="flex flex-col h-screen bg-bg-primary">
+      <div className="flex flex-col h-[100dvh] pb-16 md:h-screen md:pb-0 bg-bg-primary">
         <TopBar />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-3">
             <p className="text-sell text-sm">{error}</p>
-            <Button variant="outline" size="sm" onClick={fetchData}>Retry</Button>
+            <Button variant="outline" size="sm" onClick={() => void fetchData()}>Retry</Button>
           </div>
         </div>
       </div>
@@ -156,14 +226,14 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-bg-primary">
+    <div className="flex flex-col h-[100dvh] pb-16 md:h-screen md:pb-0 bg-bg-primary">
       <TopBar />
 
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+      <div className="page-main space-y-4 sm:space-y-6">
         {/* Welcome */}
-        <div>
-          <h2 className="text-lg font-semibold text-text-primary">{greeting}, Trader</h2>
-          <p className="text-sm text-text-tertiary">Here&apos;s your account overview</p>
+        <div className="min-w-0">
+          <h2 className="text-base sm:text-lg font-semibold text-text-primary">{greeting}, Trader</h2>
+          <p className="text-xs sm:text-sm text-text-tertiary mt-0.5">Here&apos;s your account overview</p>
         </div>
 
         {/* Banners */}
@@ -184,7 +254,7 @@ export default function DashboardPage() {
         )}
 
         {/* Stat Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
           <StatCard
             label="Balance"
             value={primaryAccount ? fmt(primaryAccount.balance, primaryAccount.currency) : '$0.00'}
@@ -211,11 +281,11 @@ export default function DashboardPage() {
         <div className="emboss-divider" />
 
         {/* Two Column */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Open Positions */}
-          <div className="glass-card rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-border-glass flex items-center justify-between">
-              <h3 className="text-md font-semibold text-text-primary">
+          <div className="glass-card rounded-xl overflow-hidden min-w-0">
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-border-glass flex items-center justify-between gap-2">
+              <h3 className="text-sm sm:text-md font-semibold text-text-primary">
                 Open Positions
                 {portfolio && portfolio.open_positions_count > 0 && (
                   <span className="ml-2 px-1.5 py-0.5 text-[10px] bg-bg-hover rounded-sm tabular-nums">
@@ -223,9 +293,9 @@ export default function DashboardPage() {
                   </span>
                 )}
               </h3>
-              <Link href="/portfolio" className="text-xs text-buy hover:underline">View All</Link>
+              <Link href="/portfolio" className="text-xs text-buy hover:underline shrink-0">View All</Link>
             </div>
-            <div className="p-4">
+            <div className="p-3 sm:p-4">
               {!portfolio?.holdings?.length ? (
                 <p className="text-sm text-text-tertiary text-center py-4">No open positions</p>
               ) : (
@@ -249,18 +319,19 @@ export default function DashboardPage() {
           </div>
 
           {/* Quick Actions */}
-          <div className="glass-card rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-border-glass">
-              <h3 className="text-md font-semibold text-text-primary">Quick Actions</h3>
+          <div className="glass-card rounded-xl overflow-hidden min-w-0">
+            <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-border-glass">
+              <h3 className="text-sm sm:text-md font-semibold text-text-primary">Quick Actions</h3>
             </div>
-            <div className="p-4 grid grid-cols-2 gap-3">
+            <div className="p-3 sm:p-4 grid grid-cols-2 gap-2 sm:gap-3">
               {QUICK_ACTIONS.map((action) => (
                 <Link
                   key={action.label}
                   href={action.href}
+                  prefetch={false}
                   className={clsx(
                     action.color,
-                    'text-sm font-medium py-3 px-4 rounded-lg text-center hover:opacity-90 transition-all flex items-center justify-center gap-2',
+                    'text-xs sm:text-sm font-medium py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg text-center hover:opacity-90 transition-all flex items-center justify-center gap-1.5 sm:gap-2 leading-snug min-h-[44px]',
                   )}
                 >
                   <span>{action.icon}</span>
@@ -272,13 +343,18 @@ export default function DashboardPage() {
         </div>
 
         {/* Notifications */}
-        <div className="glass-card rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-border-glass flex items-center justify-between">
-            <h3 className="text-md font-semibold text-text-primary">Recent Notifications</h3>
-            <Button variant="ghost" size="sm" onClick={fetchData}>Refresh</Button>
+        <div className="glass-card rounded-xl overflow-hidden min-w-0">
+          <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-border-glass flex items-center justify-between gap-2">
+            <h3 className="text-sm sm:text-md font-semibold text-text-primary">Recent Notifications</h3>
+            <Button variant="ghost" size="sm" onClick={() => void fetchData()}>Refresh</Button>
           </div>
           <div className="divide-y divide-border-glass/50">
-            {notifications.length === 0 ? (
+            {extrasLoading && notifications.length === 0 ? (
+              <div className="px-4 py-6 flex flex-col items-center gap-2 text-sm text-text-tertiary">
+                <div className="w-5 h-5 border-2 border-buy border-t-transparent rounded-full animate-spin" />
+                <span>Loading notifications…</span>
+              </div>
+            ) : notifications.length === 0 ? (
               <div className="px-4 py-6 text-center text-sm text-text-tertiary">No recent notifications</div>
             ) : (
               notifications.map((n) => (

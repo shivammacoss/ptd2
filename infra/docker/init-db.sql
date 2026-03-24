@@ -228,7 +228,8 @@ CREATE TABLE trade_history (
     commission DECIMAL(18,8) DEFAULT 0,
     profit DECIMAL(18,8) NOT NULL,
     opened_at TIMESTAMPTZ NOT NULL,
-    closed_at TIMESTAMPTZ NOT NULL
+    closed_at TIMESTAMPTZ NOT NULL,
+    close_reason VARCHAR(20) DEFAULT 'manual'
 );
 
 -- ============================================

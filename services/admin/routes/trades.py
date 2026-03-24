@@ -9,14 +9,14 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..config import get_settings
-from ..database import get_db
-from ..dependencies import get_current_admin, require_permission, write_audit_log
-from ..models import (
+from config import get_settings
+from database import get_db
+from dependencies import get_current_admin, require_permission, write_audit_log
+from models import (
     User, TradingAccount, Position, Order, Instrument, TradeHistory,
     PositionStatus, OrderStatus, OrderType, OrderSide, Transaction, CopyTrade,
 )
-from ..schemas import (
+from schemas import (
     PositionOut, OrderOut, TradeHistoryOut, PaginatedResponse,
     ModifyPositionRequest, ClosePositionRequest, CreateTradeRequest,
 )

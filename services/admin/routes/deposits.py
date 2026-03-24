@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import get_db
-from ..dependencies import get_current_admin, require_permission, write_audit_log
-from ..models import User, TradingAccount, Deposit, Withdrawal, Transaction, BonusOffer, UserBonus
-from ..schemas import DepositOut, WithdrawalOut, PaginatedResponse, RejectRequest
+from database import get_db
+from dependencies import get_current_admin, require_permission, write_audit_log
+from models import User, TradingAccount, Deposit, Withdrawal, Transaction, BonusOffer, UserBonus
+from schemas import DepositOut, WithdrawalOut, PaginatedResponse, RejectRequest
 
 router = APIRouter(prefix="/finance", tags=["Finance"])
 

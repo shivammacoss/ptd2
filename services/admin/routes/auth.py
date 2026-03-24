@@ -6,11 +6,11 @@ from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..config import get_settings
-from ..database import get_db
-from ..dependencies import get_current_admin
-from ..models import User
-from ..schemas import AdminLoginRequest, AdminLoginResponse, AdminRefreshRequest
+from config import get_settings
+from database import get_db
+from dependencies import get_current_admin
+from models import User
+from schemas import AdminLoginRequest, AdminLoginResponse, AdminRefreshRequest
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -101,8 +101,8 @@ async def get_admin_me(
     admin: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    from ..dependencies import EMPLOYEE_ROLE_PERMISSIONS
-    from ..models import Employee
+    from dependencies import EMPLOYEE_ROLE_PERMISSIONS
+    from models import Employee
 
     employee_role = None
     permissions = set()

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import MobileBottomNav from '@/components/layout/MobileBottomNav';
 
 export const metadata: Metadata = {
   title: 'ProTrader',
@@ -16,6 +17,8 @@ export const viewport: Viewport = {
   themeColor: '#000000',
 };
 
+import { AuthProvider } from '@/components/providers/AuthProvider';
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -28,21 +31,24 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-full">
         <ThemeProvider>
-          {children}
-          <Toaster
-            position="top-center"
-            toastOptions={{
-              style: {
-                background: 'var(--bg-tertiary)',
-                color: 'var(--text-primary)',
-                border: '1px solid var(--border-primary)',
-                fontSize: '13px',
-                borderRadius: '8px',
-              },
-              success: { iconTheme: { primary: '#2962FF', secondary: '#E8EAED' } },
-              error: { iconTheme: { primary: '#FF2440', secondary: '#E8EAED' } },
-            }}
-          />
+          <AuthProvider>
+            {children}
+            <MobileBottomNav />
+            <Toaster
+              position="top-center"
+              toastOptions={{
+                style: {
+                  background: 'var(--bg-tertiary)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border-primary)',
+                  fontSize: '13px',
+                  borderRadius: '8px',
+                },
+                success: { iconTheme: { primary: '#2962FF', secondary: '#E8EAED' } },
+                error: { iconTheme: { primary: '#FF2440', secondary: '#E8EAED' } },
+              }}
+            />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

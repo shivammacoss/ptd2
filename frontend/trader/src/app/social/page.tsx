@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
 import TopBar from '@/components/layout/TopBar';
-import api from '@/lib/api/client';
+import api, { getApiBase } from '@/lib/api/client';
 
 const TEAL = '#14B8A6';
 
@@ -350,7 +350,7 @@ function CopyModal({
     if (!accountId.trim()) { toast.error('Select a trading account'); return; }
     setSubmitting(true);
     try {
-      const copyResp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/social/copy?master_id=${provider.id}&account_id=${accountId}&amount=${amt}`, {
+      const copyResp = await fetch(`${getApiBase()}/social/copy?master_id=${provider.id}&account_id=${accountId}&amount=${amt}`, {
         method: 'POST', headers: { 'Authorization': `Bearer ${api.getToken()}`, 'Content-Type': 'application/json' },
       });
       if (!copyResp.ok) { const err = await copyResp.json().catch(() => ({})); throw new Error(err.detail || 'Failed'); }
@@ -677,7 +677,7 @@ function MammPammTab() {
                   if (!live) { toast.error('No live account'); return; }
                   const amount = prompt(`Invest in ${a.manager_name}\nMin: $${a.min_investment}\n\nEnter amount:`);
                   if (!amount || parseFloat(amount) <= 0) return;
-                  const investResp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/social/mamm-pamm/${a.id}/invest?account_id=${live.id}&amount=${amount}`, {
+                  const investResp = await fetch(`${getApiBase()}/social/mamm-pamm/${a.id}/invest?account_id=${live.id}&amount=${amount}`, {
                     method: 'POST', headers: { 'Authorization': `Bearer ${api.getToken()}`, 'Content-Type': 'application/json' },
                   });
                   if (!investResp.ok) { const err = await investResp.json().catch(() => ({})); throw new Error(err.detail || 'Failed'); }
@@ -729,10 +729,10 @@ export default function SocialPage() {
   const [activeTab, setActiveTab] = useState<TabId>('leaderboard');
 
   return (
-    <div className="flex flex-col min-h-screen bg-bg-primary min-w-0 overflow-x-hidden">
+    <div className="flex flex-col min-h-[100dvh] pb-16 md:pb-0 bg-bg-primary min-w-0 overflow-x-hidden">
       <TopBar />
 
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
         {/* Hero */}
         <section
           className={clsx(
@@ -741,8 +741,8 @@ export default function SocialPage() {
             '[data-theme="light"]:from-[#99F6E4] [data-theme="light"]:via-[#5EEAD4] [data-theme="light"]:to-[#2DD4BF]'
           )}
         >
-          <div className="relative z-10 px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-            <h1 className="text-2xl sm:text-3xl font-bold text-white [data-theme='light']:text-black mb-2">
+          <div className="relative z-10 px-3 sm:px-6 lg:px-8 py-6 sm:py-10">
+            <h1 className="text-xl sm:text-3xl font-bold text-white [data-theme='light']:text-black mb-2 leading-tight">
               Copy Global Elite Traders
             </h1>
             <p className="text-sm text-white/80 [data-theme='light']:text-black/70">
@@ -751,16 +751,16 @@ export default function SocialPage() {
           </div>
         </section>
 
-        <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto">
+        <div className="px-3 sm:px-6 lg:px-8 py-4 sm:py-6 max-w-7xl mx-auto w-full">
           {/* Tab bar */}
-          <div className="flex items-center gap-1 mb-6 p-1 rounded-xl bg-bg-secondary border border-border-glass w-fit [data-theme='light']:bg-bg-tertiary [data-theme='light']:border-black">
+          <div className="flex items-center gap-0.5 sm:gap-1 mb-4 sm:mb-6 p-1 rounded-xl bg-bg-secondary border border-border-glass w-full sm:w-fit overflow-x-auto scrollbar-none [data-theme='light']:bg-bg-tertiary [data-theme='light']:border-black">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
                 className={clsx(
-                  'px-4 py-2 rounded-lg text-xs font-medium transition-all',
+                  'shrink-0 min-h-[40px] px-3 sm:px-4 py-2 rounded-lg text-[11px] sm:text-xs font-medium transition-all',
                   activeTab === tab.id
                     ? 'bg-[#14B8A6] text-white shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
@@ -822,7 +822,7 @@ function BecomeProviderTab() {
         max_investors: maxInvestors,
         ...(description ? { description } : {}),
       });
-      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/social/become-provider?${params}`, {
+      const resp = await fetch(`${getApiBase()}/social/become-provider?${params}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${api.getToken()}`, 'Content-Type': 'application/json' },
       });
