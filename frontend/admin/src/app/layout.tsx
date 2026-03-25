@@ -1,3 +1,4 @@
+import React from 'react';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={inter.variable} style={{ '--font-jetbrains': "ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace" } as React.CSSProperties}>
+    <html lang="en" suppressHydrationWarning className={inter.variable} style={{ ['--font-jetbrains' as string]: "ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace" }}>
       <body className={`${inter.className} min-h-screen bg-bg-primary text-text-primary antialiased`}>
         <ThemeInitScript />
         {children}
