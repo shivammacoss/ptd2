@@ -6,11 +6,11 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:8000/api/:path*',
+        destination: 'http://gateway:8000/api/:path*',
       },
       {
         source: '/admin-api/:path*',
-        destination: 'http://localhost:8001/api/v1/admin/:path*',
+        destination: 'http://admin-api:8001/api/v1/admin/:path*',
       },
     ];
   },
