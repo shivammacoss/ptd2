@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/packages/common /app/packages/common
 RUN pip install -e /app/packages/common
 
-COPY backend/services/risk-engine /app/services/risk-engine
+COPY backend/services/risk-engine /app/services/risk_engine
 
 ENV PYTHONPATH=/app
 

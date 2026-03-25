@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/packages/common /app/packages/common
 RUN pip install -e /app/packages/common
 
-COPY backend/services/market-data /app/services/market-data
+COPY backend/services/market-data /app/services/market_data
 
 ENV PYTHONPATH=/app
 
