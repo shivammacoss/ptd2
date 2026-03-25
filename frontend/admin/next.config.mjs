@@ -1,6 +1,5 @@
-import type { NextConfig } from 'next';
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   async rewrites() {
@@ -11,7 +10,7 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/admin-api/:path*',
-        destination: 'http://localhost:8001/admin/:path*',
+        destination: 'http://localhost:8001/api/v1/admin/:path*',
       },
     ];
   },
