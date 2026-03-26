@@ -1,11 +1,16 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from passlib.context import CryptContext
+from passlib.exc import UnknownHashError
+import logging
 from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger("uvicorn.error")
 
 from packages.common.src.config import get_settings
 from packages.common.src.database import get_db
@@ -19,31 +24,54 @@ settings = get_settings()
 
 
 def create_admin_token(admin_id: str, role: str) -> str:
-    expire = datetime.utcnow() + timedelta(hours=settings.ADMIN_JWT_EXPIRY_HOURS)
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(hours=settings.ADMIN_JWT_EXPIRY_HOURS)
     payload = {
         "admin_id": admin_id,
-        "role": role,
+        "role": str(role),
         "type": "admin",
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": now,
     }
-    return jwt.encode(payload, settings.ADMIN_JWT_SECRET, algorithm=settings.ADMIN_JWT_ALGORITHM)
+    try:
+        return jwt.encode(payload, settings.ADMIN_JWT_SECRET, algorithm=settings.ADMIN_JWT_ALGORITHM)
+    except jwt.PyJWTError as e:
+        logger.error("Admin JWT encode failed: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server configuration error (JWT)",
+        ) from e
 
 
 @router.post("/login", response_model=AdminLoginResponse)
 async def admin_login(body: AdminLoginRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(User).where(
-            User.email == body.email,
-            User.role.in_(["admin", "super_admin"]),
+    try:
+        result = await db.execute(
+            select(User).where(
+                User.email == body.email,
+                User.role.in_(["admin", "super_admin"]),
+            )
         )
-    )
+    except (OperationalError, DBAPIError) as e:
+        logger.exception("Database error on admin login")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database unavailable",
+        ) from e
+
     admin = result.scalar_one_or_none()
 
     if admin is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    if not pwd_context.verify(body.password, admin.password_hash):
+    try:
+        password_ok = pwd_context.verify(body.password, admin.password_hash)
+    except (UnknownHashError, ValueError, TypeError):
+        password_ok = False
+    except Exception:
+        logger.exception("Password verify error for admin email=%s", body.email)
+        password_ok = False
+    if not password_ok:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     if admin.status != "active":

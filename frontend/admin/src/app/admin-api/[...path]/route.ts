@@ -4,8 +4,6 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Proxies /admin-api/* → admin-api service at /api/v1/admin/*.
- * Use this so the browser never calls docker-only hostnames (e.g. admin-api:8001).
- *
  * Set ADMIN_API_PROXY_TARGET (e.g. http://admin-api:8001 in Docker, http://127.0.0.1:8001 locally).
  */
 function adminApiOrigin(): string {
@@ -14,6 +12,13 @@ function adminApiOrigin(): string {
     process.env.ADMIN_API_INTERNAL_URL ||
     'http://127.0.0.1:8001';
   return String(raw).replace(/\/$/, '');
+}
+
+async function resolvePathParam(
+  params: Promise<{ path?: string[] }> | { path?: string[] },
+): Promise<string[]> {
+  const p = params instanceof Promise ? await params : params;
+  return p.path ?? [];
 }
 
 async function proxy(req: NextRequest, segments: string[]): Promise<NextResponse> {
@@ -57,42 +62,61 @@ async function proxy(req: NextRequest, segments: string[]): Promise<NextResponse
     return NextResponse.json(
       {
         detail:
-          'Cannot reach admin API. Run: docker compose up -d admin-api (or start admin API on port 8001). ' +
-          `Proxy target: ${adminApiOrigin()}`,
+          'Cannot reach admin API. Ensure admin-api is running and ADMIN_API_PROXY_TARGET is correct. ' +
+          `Target: ${adminApiOrigin()}`,
       },
       { status: 502 },
     );
+  }
+
+  let buf: ArrayBuffer;
+  try {
+    buf = await res.arrayBuffer();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'read failed';
+    console.error('[admin-api proxy] response body', targetUrl, msg);
+    return NextResponse.json({ detail: 'Failed to read admin API response' }, { status: 502 });
   }
 
   const out = new Headers();
   const ctOut = res.headers.get('content-type');
   if (ctOut) out.set('content-type', ctOut);
 
-  return new NextResponse(await res.arrayBuffer(), {
+  return new NextResponse(buf, {
     status: res.status,
     statusText: res.statusText,
     headers: out,
   });
 }
 
-type RouteCtx = { params: { path: string[] } };
+type RouteCtx = { params: Promise<{ path?: string[] }> | { path?: string[] } };
+
+async function safeProxy(req: NextRequest, ctx: RouteCtx): Promise<NextResponse> {
+  try {
+    const segments = await resolvePathParam(ctx.params);
+    return await proxy(req, segments);
+  } catch (e) {
+    console.error('[admin-api proxy] unhandled', e);
+    return NextResponse.json({ detail: 'Admin API proxy error' }, { status: 500 });
+  }
+}
 
 export async function GET(req: NextRequest, ctx: RouteCtx) {
-  return proxy(req, ctx.params.path ?? []);
+  return safeProxy(req, ctx);
 }
 
 export async function POST(req: NextRequest, ctx: RouteCtx) {
-  return proxy(req, ctx.params.path ?? []);
+  return safeProxy(req, ctx);
 }
 
 export async function PUT(req: NextRequest, ctx: RouteCtx) {
-  return proxy(req, ctx.params.path ?? []);
+  return safeProxy(req, ctx);
 }
 
 export async function PATCH(req: NextRequest, ctx: RouteCtx) {
-  return proxy(req, ctx.params.path ?? []);
+  return safeProxy(req, ctx);
 }
 
 export async function DELETE(req: NextRequest, ctx: RouteCtx) {
-  return proxy(req, ctx.params.path ?? []);
+  return safeProxy(req, ctx);
 }

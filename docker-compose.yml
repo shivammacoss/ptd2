@@ -84,23 +84,24 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
 
   # Admin dashboard API (port 8001)
+  # Loads secrets from backend/.env (Compose does NOT auto-load that path for ${VAR} substitution).
   admin-api:
     build:
       context: .
       dockerfile: backend/services/admin/Dockerfile
     ports:
       - "8001:8001"
+    env_file:
+      - path: ./backend/.env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://protrader:protrader_dev@postgres:5432/protrader
+      # Override: shared backend/.env uses REDIS_URL for gateway (db 0); admin service must use db 1
       REDIS_URL: redis://redis:6379/1
-      USER_JWT_SECRET: dev-secret-change-in-production
-      ADMIN_JWT_SECRET: admin-secret-change-in-production
-      CORS_ORIGINS: http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001
     volumes:
       - ./backend/services/admin:/app
       - ./backend/packages/common:/app/packages/common
@@ -112,6 +113,9 @@ services:
       dockerfile: backend/services/gateway/Dockerfile
     ports:
       - "8000:8000"
+    env_file:
+      - path: ./backend/.env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy
@@ -120,15 +124,6 @@ services:
       # Kafka "healthy" can block for a long time; gateway only needs broker up
       kafka:
         condition: service_started
-    environment:
-      DATABASE_URL: postgresql+asyncpg://protrader:protrader_dev@postgres:5432/protrader
-      REDIS_URL: redis://redis:6379/0
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      TIMESCALE_URL: postgresql+asyncpg://protrader:protrader_dev@timescaledb:5432/marketdata
-      JWT_SECRET: dev-secret-change-in-production
-      INFOWAY_API_KEY: ${INFOWAY_API_KEY}
-      INFOWAY_API_URL: ${INFOWAY_API_URL:-https://api.infoway.io}
-      ENVIRONMENT: development
     volumes:
       - ./backend/services/gateway:/app/services/gateway
       - ./backend/packages:/app/packages
@@ -137,6 +132,9 @@ services:
     build:
       context: .
       dockerfile: backend/services/market-data/Dockerfile
+    env_file:
+      - path: ./backend/.env
+        required: false
     depends_on:
       timescaledb:
         condition: service_healthy
@@ -144,13 +142,6 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
-    environment:
-      TIMESCALE_URL: postgresql+asyncpg://protrader:protrader_dev@timescaledb:5432/marketdata
-      REDIS_URL: redis://redis:6379/0
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      INFOWAY_API_KEY: ${INFOWAY_API_KEY}
-      INFOWAY_API_URL: ${INFOWAY_API_URL:-https://api.infoway.io}
-      ENVIRONMENT: development
     volumes:
       - ./backend/services/market-data:/app/services/market_data
       - ./backend/packages:/app/packages
@@ -159,6 +150,9 @@ services:
     build:
       context: .
       dockerfile: backend/services/b-book-engine/Dockerfile
+    env_file:
+      - path: ./backend/.env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy
@@ -166,11 +160,6 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
-    environment:
-      DATABASE_URL: postgresql+asyncpg://protrader:protrader_dev@postgres:5432/protrader
-      REDIS_URL: redis://redis:6379/0
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      ENVIRONMENT: development
     volumes:
       - ./backend/services/b-book-engine:/app/services/b_book_engine
       - ./backend/packages:/app/packages
@@ -179,6 +168,9 @@ services:
     build:
       context: .
       dockerfile: backend/services/risk-engine/Dockerfile
+    env_file:
+      - path: ./backend/.env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy
@@ -186,11 +178,6 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
-    environment:
-      DATABASE_URL: postgresql+asyncpg://protrader:protrader_dev@postgres:5432/protrader
-      REDIS_URL: redis://redis:6379/0
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      ENVIRONMENT: development
     volumes:
       - ./backend/services/risk-engine:/app/services/risk_engine
       - ./backend/packages:/app/packages

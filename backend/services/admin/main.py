@@ -1,10 +1,14 @@
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from packages.common.src.config import get_settings
 from packages.common.src.database import engine
+
+logger = logging.getLogger("uvicorn.error")
 from routes import (
     auth, dashboard, users, trades, deposits, banks,
     config as routes_config, business, social, analytics, bonus, banners,
@@ -12,6 +16,14 @@ from routes import (
 )
 
 app_settings = get_settings()
+
+_cors_origins = [
+    o.strip()
+    for o in app_settings.CORS_ORIGINS.split(",")
+    if o.strip()
+]
+if not _cors_origins:
+    _cors_origins = ["http://localhost:3001"]
 
 
 @asynccontextmanager
@@ -28,11 +40,22 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=app_settings.CORS_ORIGINS.split(","),
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception(request: Request, exc: Exception):
+    """Return JSON (not plain text) so proxies and the admin UI can parse errors."""
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
 
 prefix = "/api/v1/admin"
 
