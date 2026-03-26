@@ -1,3 +1,5 @@
+import { getWebSocketBaseUrl } from './getWebSocketBaseUrl';
+
 type TradeCallback = (data: TradeEvent) => void;
 
 export interface TradeEvent {
@@ -15,9 +17,9 @@ class TradeSocket {
     this.accountId = accountId;
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL
-      ? `${process.env.NEXT_PUBLIC_WS_URL.replace('/prices', '')}/trades/${accountId}`
-      : `ws://${window.location.host}/ws/trades/${accountId}`;
+    const base = getWebSocketBaseUrl();
+    const qs = token ? `?token=${encodeURIComponent(token)}` : '';
+    const wsUrl = `${base}/ws/trades/${accountId}${qs}`;
 
     this.ws = new WebSocket(wsUrl);
 

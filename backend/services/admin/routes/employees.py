@@ -2,9 +2,10 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from passlib.context import CryptContext
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from packages.common.src.auth import hash_password
 
 from packages.common.src.database import get_db
 from dependencies import get_current_admin, write_audit_log
@@ -12,7 +13,6 @@ from packages.common.src.models import User, Employee, AuditLog
 from packages.common.src.admin_schemas import EmployeeIn, EmployeeUpdate, EmployeeOut, AuditLogOut, PaginatedResponse
 
 router = APIRouter(prefix="/employees", tags=["Employees"])
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 VALID_EMPLOYEE_ROLES = [
     "super_admin", "trade_manager", "support", "finance", "risk_manager", "marketing"
@@ -66,7 +66,7 @@ async def create_employee(
 
     import secrets
     raw_password = body.password or secrets.token_urlsafe(12)
-    password_hash = pwd_context.hash(raw_password)
+    password_hash = hash_password(raw_password)
 
     first_name = body.first_name
     last_name = body.last_name

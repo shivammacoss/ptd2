@@ -136,12 +136,14 @@ async def apply_sub_broker(
 def _get_frontend_url() -> str:
     from packages.common.src.config import get_settings
     s = get_settings()
-    origins = s.CORS_ORIGINS.split(",")
+    origins = [o.strip() for o in s.CORS_ORIGINS.split(",") if o.strip()]
     for o in origins:
-        o = o.strip()
+        if "protrader.today" in o:
+            return o
+    for o in origins:
         if ":3000" in o:
             return o
-    return origins[0].strip() if origins else "http://localhost:3000"
+    return origins[0] if origins else "http://localhost:3000"
 
 
 @router.get("/ib/dashboard")

@@ -1,4 +1,20 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+/**
+ * Browser-reachable admin API base (no trailing slash).
+ * - If NEXT_PUBLIC_ADMIN_API_URL or NEXT_PUBLIC_API_URL is set → `{origin}/api/v1/admin`.
+ * - Otherwise same-origin `/admin-api` (proxied by app/admin-api route → admin service).
+ */
+export function getAdminApiBase(): string {
+  const raw = (process.env.NEXT_PUBLIC_ADMIN_API_URL || process.env.NEXT_PUBLIC_API_URL || '').trim();
+  if (raw) {
+    const u = raw.replace(/\/$/, '');
+    if (u.includes('/api/v1/admin')) return u;
+    return `${u}/api/v1/admin`;
+  }
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/admin-api`;
+  }
+  return `${(process.env.ADMIN_API_PROXY_TARGET || 'http://127.0.0.1:8001').replace(/\/$/, '')}/api/v1/admin`;
+}
 
 /** FastAPI returns `detail` as string, object, or validation error array — never pass raw objects to `new Error()`. */
 export function formatApiErrorDetail(detail: unknown): string {
@@ -66,7 +82,9 @@ class AdminApi {
     body?: unknown,
     params?: Record<string, string>,
   ): Promise<T> {
-    const url = new URL(`${BASE_URL}/admin${path}`);
+    const base = getAdminApiBase();
+    const p = path.startsWith('/') ? path : `/${path}`;
+    const url = new URL(`${base}${p}`);
     if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };

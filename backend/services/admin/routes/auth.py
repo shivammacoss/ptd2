@@ -1,12 +1,17 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from passlib.context import CryptContext
-from sqlalchemy import select
+from sqlalchemy import select, func
+from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+logger = logging.getLogger("uvicorn.error")
+
+from packages.common.src.auth import verify_password
 from packages.common.src.config import get_settings
 from packages.common.src.database import get_db
 from dependencies import get_current_admin
@@ -14,36 +19,56 @@ from packages.common.src.models import User
 from packages.common.src.admin_schemas import AdminLoginRequest, AdminLoginResponse, AdminRefreshRequest
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 settings = get_settings()
 
 
 def create_admin_token(admin_id: str, role: str) -> str:
-    expire = datetime.utcnow() + timedelta(hours=settings.ADMIN_JWT_EXPIRY_HOURS)
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(hours=settings.ADMIN_JWT_EXPIRY_HOURS)
     payload = {
         "admin_id": admin_id,
-        "role": role,
+        "role": str(role),
         "type": "admin",
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": now,
     }
-    return jwt.encode(payload, settings.ADMIN_JWT_SECRET, algorithm=settings.ADMIN_JWT_ALGORITHM)
+    try:
+        return jwt.encode(payload, settings.ADMIN_JWT_SECRET, algorithm=settings.ADMIN_JWT_ALGORITHM)
+    except jwt.PyJWTError as e:
+        logger.error("Admin JWT encode failed: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server configuration error (JWT)",
+        ) from e
 
 
 @router.post("/login", response_model=AdminLoginResponse)
 async def admin_login(body: AdminLoginRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(User).where(
-            User.email == body.email,
-            User.role.in_(["admin", "super_admin"]),
+    email_norm = (body.email or "").strip().lower()
+    if not email_norm:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    try:
+        result = await db.execute(
+            select(User).where(
+                func.lower(User.email) == email_norm,
+                User.role.in_(["admin", "super_admin"]),
+            )
         )
-    )
+    except (OperationalError, DBAPIError) as e:
+        logger.exception("Database error on admin login")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database unavailable",
+        ) from e
+
     admin = result.scalar_one_or_none()
 
     if admin is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    if not pwd_context.verify(body.password, admin.password_hash):
+    password_ok = verify_password(body.password, admin.password_hash)
+    if not password_ok:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     if admin.status != "active":

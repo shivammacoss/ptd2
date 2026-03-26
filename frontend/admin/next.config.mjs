@@ -1,4 +1,7 @@
 /** @type {import('next').NextConfig} */
+// Baked at `next build`; use .env.local GATEWAY_INTERNAL_URL=http://127.0.0.1:8000 for local `next dev`.
+const gatewayTarget = process.env.GATEWAY_INTERNAL_URL || 'http://gateway:8000';
+
 const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
@@ -6,11 +9,7 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://gateway:8000/api/:path*',
-      },
-      {
-        source: '/admin-api/:path*',
-        destination: 'http://admin-api:8001/api/v1/admin/:path*',
+        destination: `${gatewayTarget.replace(/\/$/, '')}/api/:path*`,
       },
     ];
   },
