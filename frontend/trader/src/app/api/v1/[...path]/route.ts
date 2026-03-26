@@ -4,15 +4,38 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Proxies /api/v1/* → gateway. More reliable than next.config rewrites on some Windows setups.
- * Set TRADER_API_PROXY_TARGET or GATEWAY_URL (e.g. http://localhost:8000).
+ *
+ * Priority: TRADER_API_PROXY_TARGET | GATEWAY_URL | INTERNAL_API_URL (strip /api/v1) | NEXT_PUBLIC_GATEWAY_ORIGIN | localhost.
+ * Docker Compose sets INTERNAL_API_URL=http://gateway:8000/api/v1 — that must be honored here.
  */
 function gatewayOrigin(): string {
-  const raw =
-    process.env.TRADER_API_PROXY_TARGET ||
-    process.env.GATEWAY_URL ||
-    process.env.NEXT_PUBLIC_GATEWAY_ORIGIN ||
-    'http://127.0.0.1:8000';
-  return String(raw).replace(/\/$/, '');
+  const explicit =
+    process.env.TRADER_API_PROXY_TARGET?.trim() ||
+    process.env.GATEWAY_URL?.trim();
+  if (explicit) {
+    return String(explicit).replace(/\/$/, '');
+  }
+
+  const internal = process.env.INTERNAL_API_URL?.trim();
+  if (internal) {
+    const base = internal.replace(/\/api\/v1\/?$/i, '').replace(/\/$/, '');
+    if (base) {
+      try {
+        const u = new URL(base);
+        const path = u.pathname.replace(/\/$/, '');
+        return path ? `${u.origin}${path}` : u.origin;
+      } catch {
+        return base;
+      }
+    }
+  }
+
+  const fallback = process.env.NEXT_PUBLIC_GATEWAY_ORIGIN?.trim();
+  if (fallback) {
+    return String(fallback).replace(/\/$/, '');
+  }
+
+  return 'http://127.0.0.1:8000';
 }
 
 async function proxy(req: NextRequest, segments: string[]): Promise<NextResponse> {

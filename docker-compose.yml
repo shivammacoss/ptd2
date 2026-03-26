@@ -193,8 +193,9 @@ services:
       - "3000:3000"
     environment:
       # Do NOT set NEXT_PUBLIC_* http/ws here — browsers on https:// will hit mixed-content blocks.
-      # Server-side proxy uses INTERNAL_API_URL only (not sent to the client bundle).
+      # App route src/app/api/v1/[...path]/route.ts proxies using INTERNAL_API_URL or TRADER_API_PROXY_TARGET.
       INTERNAL_API_URL: http://gateway:8000/api/v1
+      TRADER_API_PROXY_TARGET: http://gateway:8000
     depends_on:
       - gateway
 
