@@ -157,7 +157,18 @@ INSERT INTO instruments (symbol, display_name, segment_id, base_currency, quote_
     ('US500', 'S&P 500', (SELECT id FROM instrument_segments WHERE name='indices'), 'US500', 'USD', 1, 0.1),
     ('NAS100', 'NASDAQ 100', (SELECT id FROM instrument_segments WHERE name='indices'), 'NAS100', 'USD', 1, 0.1),
     ('BTCUSD', 'Bitcoin / US Dollar', (SELECT id FROM instrument_segments WHERE name='crypto'), 'BTC', 'USD', 2, 0.01),
-    ('ETHUSD', 'Ethereum / US Dollar', (SELECT id FROM instrument_segments WHERE name='crypto'), 'ETH', 'USD', 2, 0.01);
+    ('ETHUSD', 'Ethereum / US Dollar', (SELECT id FROM instrument_segments WHERE name='crypto'), 'ETH', 'USD', 2, 0.01),
+    ('LTCUSD', 'Litecoin / US Dollar', (SELECT id FROM instrument_segments WHERE name='crypto'), 'LTC', 'USD', 2, 0.01),
+    ('XRPUSD', 'Ripple / US Dollar', (SELECT id FROM instrument_segments WHERE name='crypto'), 'XRP', 'USD', 4, 0.0001),
+    ('SOLUSD', 'Solana / US Dollar', (SELECT id FROM instrument_segments WHERE name='crypto'), 'SOL', 'USD', 2, 0.01),
+    ('EURCHF', 'Euro / Swiss Franc', (SELECT id FROM instrument_segments WHERE name='forex'), 'EUR', 'CHF', 5, 0.0001),
+    ('GBPCHF', 'British Pound / Swiss Franc', (SELECT id FROM instrument_segments WHERE name='forex'), 'GBP', 'CHF', 5, 0.0001),
+    ('AUDJPY', 'Australian Dollar / Japanese Yen', (SELECT id FROM instrument_segments WHERE name='forex'), 'AUD', 'JPY', 3, 0.01),
+    ('CADJPY', 'Canadian Dollar / Japanese Yen', (SELECT id FROM instrument_segments WHERE name='forex'), 'CAD', 'JPY', 3, 0.01),
+    ('NZDJPY', 'New Zealand Dollar / Japanese Yen', (SELECT id FROM instrument_segments WHERE name='forex'), 'NZD', 'JPY', 3, 0.01),
+    ('USDHKD', 'US Dollar / Hong Kong Dollar', (SELECT id FROM instrument_segments WHERE name='forex'), 'USD', 'HKD', 5, 0.0001),
+    ('UK100', 'FTSE 100', (SELECT id FROM instrument_segments WHERE name='indices'), 'UK100', 'GBP', 1, 0.1),
+    ('GER40', 'DAX 40', (SELECT id FROM instrument_segments WHERE name='indices'), 'GER40', 'EUR', 1, 0.1);
 
 -- ============================================
 -- ORDERS & TRADES

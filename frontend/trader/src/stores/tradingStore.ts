@@ -102,8 +102,9 @@ interface TradingState {
 }
 
 const DEFAULT_WATCHLIST = [
-  'EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'BTCUSD',
-  'US30', 'NAS100', 'USOIL', 'ETHUSD', 'AUDUSD',
+  'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD',
+  'XAUUSD', 'USOIL', 'BTCUSD', 'ETHUSD', 'SOLUSD',
+  'US30', 'NAS100', 'GER40', 'EURJPY', 'GBPJPY',
 ];
 
 export const useTradingStore = create<TradingState>()((set, get) => ({

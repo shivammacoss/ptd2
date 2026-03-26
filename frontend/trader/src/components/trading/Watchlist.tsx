@@ -26,12 +26,22 @@ const SYMBOL_META: Record<string, { display: string; segment: string }> = {
   ETHUSD: { display: 'Ethereum', segment: 'Crypto' },
   LTCUSD: { display: 'Litecoin', segment: 'Crypto' },
   XRPUSD: { display: 'Ripple', segment: 'Crypto' },
+  SOLUSD: { display: 'Solana', segment: 'Crypto' },
+  EURCHF: { display: 'EUR/CHF', segment: 'Forex' },
+  GBPCHF: { display: 'GBP/CHF', segment: 'Forex' },
+  AUDJPY: { display: 'AUD/JPY', segment: 'Forex' },
+  CADJPY: { display: 'CAD/JPY', segment: 'Forex' },
+  NZDJPY: { display: 'NZD/JPY', segment: 'Forex' },
+  USDHKD: { display: 'USD/HKD', segment: 'Forex' },
+  UK100: { display: 'FTSE 100', segment: 'Indices' },
+  GER40: { display: 'DAX 40', segment: 'Indices' },
 };
 
 function getDigits(symbol: string): number {
-  if (['USDJPY', 'EURJPY', 'GBPJPY'].includes(symbol)) return 3;
-  if (['XAUUSD', 'USOIL', 'BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD'].includes(symbol)) return 2;
-  if (['US30', 'US500', 'NAS100'].includes(symbol)) return 1;
+  if (['USDJPY', 'EURJPY', 'GBPJPY', 'AUDJPY', 'CADJPY', 'NZDJPY'].includes(symbol)) return 3;
+  if (symbol === 'XRPUSD') return 4;
+  if (['XAUUSD', 'USOIL', 'BTCUSD', 'ETHUSD', 'LTCUSD', 'SOLUSD'].includes(symbol)) return 2;
+  if (['US30', 'US500', 'NAS100', 'UK100', 'GER40'].includes(symbol)) return 1;
   return 5;
 }
 
@@ -139,7 +149,7 @@ export default function Watchlist() {
               key={symbol}
               onClick={() => setActiveOrderSymbol(symbol)}
               className={clsx(
-                'group flex items-center gap-3 px-3 py-3.5 transition-all active:bg-buy/5 cursor-pointer border-l-2 border-transparent hover:bg-bg-hover/30'
+                'group grid grid-cols-[auto_minmax(0,1fr)_minmax(5.5rem,auto)_minmax(5.5rem,auto)_auto] items-center gap-x-2 gap-y-1 px-3 py-3.5 transition-all active:bg-buy/5 cursor-pointer border-l-2 border-transparent hover:bg-bg-hover/30 overflow-hidden'
               )}
             >
               {/* Star Icon */}
@@ -153,31 +163,31 @@ export default function Watchlist() {
               </button>
 
               {/* Name & Desc */}
-              <div className="flex-1 min-w-0">
-                <div className="text-[15px] font-bold text-text-primary tracking-tight">{symbol}</div>
+              <div className="min-w-0 overflow-hidden">
+                <div className="text-[15px] font-bold text-text-primary tracking-tight truncate">{symbol}</div>
                 <div className="text-[11px] font-medium text-text-tertiary/70 uppercase truncate">{meta?.display || symbol}</div>
               </div>
 
-              {/* Prices */}
-              <div className="flex items-center gap-3 shrink-0">
-                <div className="text-right">
-                  <div className={clsx(
-                    'text-[15px] font-bold tabular-nums font-mono tracking-tighter transition-colors',
-                    flash === 'up' ? 'text-buy' : flash === 'down' ? 'text-sell' : 'text-sell'
-                  )}>
-                    {tick ? tick.bid.toFixed(digits) : '--'}
-                  </div>
-                  <div className="text-[10px] font-bold text-text-tertiary/40 uppercase tracking-widest text-right px-0.5">Bid</div>
+              {/* Bid */}
+              <div className="text-right min-w-0 whitespace-nowrap justify-self-end">
+                <div className={clsx(
+                  'text-[14px] sm:text-[15px] font-bold tabular-nums font-mono tracking-tight transition-colors',
+                  flash === 'up' ? 'text-buy' : flash === 'down' ? 'text-sell' : 'text-sell'
+                )}>
+                  {tick ? tick.bid.toFixed(digits) : '--'}
                 </div>
-                <div className="text-right">
-                  <div className={clsx(
-                    'text-[15px] font-bold tabular-nums font-mono tracking-tighter transition-colors',
-                    flash === 'up' ? 'text-buy' : 'text-sell'
-                  )}>
-                    {tick ? tick.ask.toFixed(digits) : '--'}
-                  </div>
-                  <div className="text-[10px] font-bold text-text-tertiary/40 uppercase tracking-widest text-right px-0.5">Ask</div>
+                <div className="text-[10px] font-bold text-text-tertiary/40 uppercase tracking-widest">Bid</div>
+              </div>
+
+              {/* Ask */}
+              <div className="text-right min-w-0 whitespace-nowrap justify-self-end">
+                <div className={clsx(
+                  'text-[14px] sm:text-[15px] font-bold tabular-nums font-mono tracking-tight transition-colors',
+                  flash === 'up' ? 'text-buy' : flash === 'down' ? 'text-sell' : 'text-sell'
+                )}>
+                  {tick ? tick.ask.toFixed(digits) : '--'}
                 </div>
+                <div className="text-[10px] font-bold text-text-tertiary/40 uppercase tracking-widest">Ask</div>
               </div>
 
               {/* Action: Chart Icon */}
