@@ -3,6 +3,7 @@ import './globals.css';
 import { Toaster } from 'react-hot-toast';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import MobileBottomNav from '@/components/layout/MobileBottomNav';
+import { AuthProvider } from '@/components/providers/AuthProvider';
 
 export const metadata: Metadata = {
   title: 'ProTrader',
@@ -17,12 +18,11 @@ export const viewport: Viewport = {
   themeColor: '#000000',
 };
 
-import { AuthProvider } from '@/components/providers/AuthProvider';
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var s=localStorage.getItem('protrader-ui');var t='dark';if(s){var j=JSON.parse(s);t=(j&&j.state&&j.state.theme)||(j&&j.theme)||'dark';}var d=document.documentElement;d.setAttribute('data-theme',t);d.classList.add(t==='light'?'theme-light':'theme-dark');if(t==='light'){d.style.backgroundColor='#F2EFE9';d.style.color='#000000';}else{d.style.backgroundColor='#000000';d.style.color='#E8EAED';}}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();`,
