@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from passlib.context import CryptContext
 from passlib.exc import UnknownHashError
 import logging
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,10 +45,14 @@ def create_admin_token(admin_id: str, role: str) -> str:
 
 @router.post("/login", response_model=AdminLoginResponse)
 async def admin_login(body: AdminLoginRequest, db: AsyncSession = Depends(get_db)):
+    email_norm = (body.email or "").strip().lower()
+    if not email_norm:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
     try:
         result = await db.execute(
             select(User).where(
-                User.email == body.email,
+                func.lower(User.email) == email_norm,
                 User.role.in_(["admin", "super_admin"]),
             )
         )
@@ -69,7 +73,7 @@ async def admin_login(body: AdminLoginRequest, db: AsyncSession = Depends(get_db
     except (UnknownHashError, ValueError, TypeError):
         password_ok = False
     except Exception:
-        logger.exception("Password verify error for admin email=%s", body.email)
+        logger.exception("Password verify error for admin email=%s", email_norm)
         password_ok = False
     if not password_ok:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
