@@ -9,7 +9,6 @@ from packages.common.src.database import get_db
 from packages.common.src.models import Instrument, InstrumentSegment
 from packages.common.src.schemas import InstrumentResponse, TickData
 from packages.common.src.redis_client import redis_client, PriceChannel
-from packages.common.src.auth import get_current_user
 
 router = APIRouter()
 
@@ -50,18 +49,9 @@ async def list_instruments(
     ]
 
 
-@router.get("/{symbol}/price", response_model=TickData)
-async def get_price(symbol: str):
-    tick_data = await redis_client.get(PriceChannel.tick_key(symbol.upper()))
-    if not tick_data:
-        raise HTTPException(status_code=404, detail=f"No price data for {symbol}")
-
-    data = json.loads(tick_data)
-    return TickData(**data)
-
-
 @router.get("/prices/all")
 async def get_all_prices():
+    """Static path before /{symbol}/price so it is never captured as a symbol."""
     keys = []
     async for key in redis_client.scan_iter(f"{PriceChannel.TICK_PREFIX}*"):
         keys.append(key)
@@ -76,3 +66,13 @@ async def get_all_prices():
             prices.append(json.loads(v))
 
     return prices
+
+
+@router.get("/{symbol}/price", response_model=TickData)
+async def get_price(symbol: str):
+    tick_data = await redis_client.get(PriceChannel.tick_key(symbol.upper()))
+    if not tick_data:
+        raise HTTPException(status_code=404, detail=f"No price data for {symbol}")
+
+    data = json.loads(tick_data)
+    return TickData(**data)

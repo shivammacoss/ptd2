@@ -116,7 +116,7 @@ export default function TradingLayout({ children }: { children: React.ReactNode 
 
     wsManager.connect();
     const unsub = wsManager.onMessage((data) => {
-      if (data.symbol && data.bid && data.ask) {
+      if (data.symbol && data.bid != null && data.ask != null) {
         updatePrice({
           symbol: data.symbol,
           bid: parseFloat(data.bid),
@@ -126,6 +126,35 @@ export default function TradingLayout({ children }: { children: React.ReactNode 
         });
       }
     });
+
+    // REST fallback when WebSocket cannot connect (e.g. HTTPS site without /ws proxy to gateway).
+    let pollCancelled = false;
+    const pollPricesFromApi = async () => {
+      try {
+        const rows = await api.get<
+          { symbol?: string; bid?: number; ask?: number; timestamp?: string; spread?: number }[]
+        >('/instruments/prices/all', undefined, { timeoutMs: 15000 });
+        if (pollCancelled || !Array.isArray(rows)) return;
+        for (const row of rows) {
+          const sym = row?.symbol;
+          if (!sym || row.bid == null || row.ask == null) continue;
+          const bid = Number(row.bid);
+          const ask = Number(row.ask);
+          if (Number.isNaN(bid) || Number.isNaN(ask)) continue;
+          updatePrice({
+            symbol: sym,
+            bid,
+            ask,
+            timestamp: row.timestamp || new Date().toISOString(),
+            spread: row.spread != null ? Number(row.spread) : ask - bid,
+          });
+        }
+      } catch {
+        /* ignore — WS may still work; market-data may be down */
+      }
+    };
+    pollPricesFromApi();
+    const pricePoll = setInterval(pollPricesFromApi, 2500);
 
     let prevPositionIds: Set<string> = new Set();
 
@@ -170,8 +199,10 @@ export default function TradingLayout({ children }: { children: React.ReactNode 
 
     return () => {
       cancelled = true;
+      pollCancelled = true;
       unsub();
       clearInterval(positionPoll);
+      clearInterval(pricePoll);
     };
   }, []);
 
