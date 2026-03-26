@@ -86,6 +86,9 @@ export default function MobileBottomNav() {
   const { theme, toggleTheme } = useUIStore();
   const [showMore, setShowMore] = useState(false);
 
+  // Hide on auth pages (login, register, impersonate)
+  if (pathname?.startsWith('/auth')) return null;
+
   const handleLogout = () => {
     toast.success('Logged out successfully!');
     setShowMore(false);

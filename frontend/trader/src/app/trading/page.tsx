@@ -103,12 +103,12 @@ export default function TradingPage() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Sync selected symbol with tabs
+  // Sync selected symbol with tabs — use functional update to avoid stale closure duplicates
   useEffect(() => {
-    if (selectedSymbol && !chartTabs.includes(selectedSymbol)) {
-      setChartTabs(prev => [...prev, selectedSymbol]);
+    if (selectedSymbol) {
+      setChartTabs(prev => prev.includes(selectedSymbol) ? prev : [...prev, selectedSymbol]);
     }
-  }, [selectedSymbol, chartTabs]);
+  }, [selectedSymbol]);
 
   const removeTab = (e: React.MouseEvent, symbol: string) => {
     e.stopPropagation();
@@ -171,7 +171,7 @@ export default function TradingPage() {
               </div>
               
               {/* Refined Quick Trade Bottom Bar */}
-              <div className="fixed bottom-[max(3.5rem,env(safe-area-inset-bottom,0px))] left-0 right-0 p-3 bg-bg-secondary/95 backdrop-blur-xl border-t border-border-glass z-50">
+              <div className="fixed bottom-[calc(3.5rem+max(0.5rem,env(safe-area-inset-bottom,0px)))] left-0 right-0 p-3 bg-bg-secondary/95 backdrop-blur-xl border-t border-border-glass z-50">
                 <div className="flex items-center justify-between mt-1">
                    <div className="flex flex-col">
                       <span className="text-[10px] font-bold text-text-tertiary uppercase tracking-wider leading-none mb-1.5">Lot Size</span>

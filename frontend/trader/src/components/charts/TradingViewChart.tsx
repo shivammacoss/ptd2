@@ -36,6 +36,17 @@ function TradingViewChartInner() {
 
     containerRef.current.innerHTML = '';
 
+    // TradingView script calls parentNode.querySelector('.tradingview-widget-container__widget')
+    // so both the widget div and script must be inside the same container div.
+    const wrapper = document.createElement('div');
+    wrapper.className = 'tradingview-widget-container';
+    wrapper.style.cssText = 'height:100%;width:100%;';
+
+    const widgetDiv = document.createElement('div');
+    widgetDiv.className = 'tradingview-widget-container__widget';
+    widgetDiv.style.cssText = 'height:100%;width:100%;';
+    wrapper.appendChild(widgetDiv);
+
     const script = document.createElement('script');
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
     script.type = 'text/javascript';
@@ -71,7 +82,8 @@ function TradingViewChartInner() {
       disabled_features: ['header_symbol_search', 'header_compare'],
     });
 
-    containerRef.current.appendChild(script);
+    wrapper.appendChild(script);
+    containerRef.current.appendChild(wrapper);
 
     return () => {
       if (containerRef.current) {
@@ -80,13 +92,7 @@ function TradingViewChartInner() {
     };
   }, [selectedSymbol, isLight]);
 
-  return (
-    <div className="w-full h-full" ref={containerRef}>
-      <div className="tradingview-widget-container" style={{ height: '100%', width: '100%' }}>
-        <div className="tradingview-widget-container__widget" style={{ height: '100%', width: '100%' }} />
-      </div>
-    </div>
-  );
+  return <div className="w-full h-full" ref={containerRef} />;
 }
 
 export default memo(TradingViewChartInner);
