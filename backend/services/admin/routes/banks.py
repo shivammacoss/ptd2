@@ -139,7 +139,7 @@ async def upload_qr_code(
     filepath = UPLOAD_DIR / filename
     filepath.write_bytes(contents)
 
-    return {"url": f"/admin/banks/qr/{filename}", "filename": filename}
+    return {"url": f"/banks/qr/{filename}", "filename": filename}
 
 
 @router.get("/qr/{filename}")

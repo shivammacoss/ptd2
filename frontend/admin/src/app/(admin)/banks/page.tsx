@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { adminApi } from '@/lib/api';
+import { adminApi, getAdminApiBase } from '@/lib/api';
 import toast from 'react-hot-toast';
 import {
   Building2,
@@ -180,7 +180,8 @@ export default function BanksPage() {
       const formData = new FormData();
       formData.append('file', file);
       const authToken = adminApi.getToken() || '';
-      const res = await fetch('http://localhost:8001/admin/banks/upload-qr', {
+      const uploadUrl = `${getAdminApiBase()}/banks/upload-qr`;
+      const res = await fetch(uploadUrl, {
         method: 'POST',
         headers: { Authorization: `Bearer ${authToken}` },
         body: formData,
@@ -190,7 +191,8 @@ export default function BanksPage() {
         throw new Error(err.detail || 'Upload failed');
       }
       const data = await res.json();
-      const qrUrl = `http://localhost:8001${data.url}`;
+      const rel = typeof data.url === 'string' ? data.url : '';
+      const qrUrl = rel.startsWith('http') ? rel : `${getAdminApiBase()}${rel.startsWith('/') ? rel : `/${rel}`}`;
       updateField('qr_code_url', qrUrl);
       toast.success('QR code uploaded');
     } catch (e: any) {

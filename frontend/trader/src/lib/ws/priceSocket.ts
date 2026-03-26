@@ -1,3 +1,5 @@
+import { getWebSocketBaseUrl } from './getWebSocketBaseUrl';
+
 type PriceCallback = (data: TickData) => void;
 
 export interface TickData {
@@ -18,7 +20,7 @@ class PriceSocket {
   connect() {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || `ws://${window.location.host}/ws/prices`;
+    const wsUrl = `${getWebSocketBaseUrl()}/ws/prices`;
 
     try {
       this.ws = new WebSocket(wsUrl);

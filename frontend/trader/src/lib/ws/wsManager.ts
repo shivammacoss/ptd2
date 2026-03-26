@@ -1,3 +1,5 @@
+import { getWebSocketBaseUrl } from './getWebSocketBaseUrl';
+
 type MessageHandler = (data: any) => void;
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected';
@@ -24,9 +26,7 @@ class WSManager {
     if (this.ws?.readyState === WebSocket.OPEN) return;
     this.setStatus('connecting');
 
-    const base = typeof window !== 'undefined'
-      ? (process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000')
-      : 'ws://localhost:8000';
+    const base = getWebSocketBaseUrl();
     const wsUrl = `${base}/ws/prices`;
 
     try {
