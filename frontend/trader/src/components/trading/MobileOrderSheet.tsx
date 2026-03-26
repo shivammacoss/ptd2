@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTradingStore } from '@/stores/tradingStore';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
+import { sounds, unlockAudio } from '@/lib/sounds';
 
 interface MobileOrderSheetProps {
   symbol: string;
@@ -12,10 +13,24 @@ interface MobileOrderSheetProps {
 
 type PendingSubtype = 'buy_limit' | 'sell_limit' | 'buy_stop' | 'sell_stop';
 
+function pendingSubtypeToApi(sub: PendingSubtype): { order_type: 'limit' | 'stop'; side: 'buy' | 'sell' } {
+  switch (sub) {
+    case 'buy_limit':
+      return { order_type: 'limit', side: 'buy' };
+    case 'sell_limit':
+      return { order_type: 'limit', side: 'sell' };
+    case 'buy_stop':
+      return { order_type: 'stop', side: 'buy' };
+    case 'sell_stop':
+      return { order_type: 'stop', side: 'sell' };
+  }
+}
+
 export default function MobileOrderSheet({ symbol, onClose }: MobileOrderSheetProps) {
   const { prices, instruments, activeAccount, placeOrder } = useTradingStore();
   const [orderType, setOrderType] = useState<'market' | 'pending'>('market');
   const [pendingSubtype, setPendingSubtype] = useState<PendingSubtype>('buy_limit');
+  const [submitting, setSubmitting] = useState(false);
   const [lots, setLots] = useState(0.01);
   const [leverage, setLeverage] = useState('1:100');
   const [sl, setSl] = useState('');
@@ -36,25 +51,63 @@ export default function MobileOrderSheet({ symbol, onClose }: MobileOrderSheetPr
       toast.error('No active account selected');
       return;
     }
+    unlockAudio();
 
-    let finalOrderType = orderType === 'market' ? 'market' : pendingSubtype;
-    let finalSide = overrideSide || (pendingSubtype.includes('buy') ? 'buy' : 'sell');
+    let apiOrderType: 'market' | 'limit' | 'stop';
+    let side: 'buy' | 'sell';
+    let priceVal: number | undefined;
 
+    if (orderType === 'market') {
+      if (!overrideSide) {
+        toast.error('Select Buy or Sell');
+        return;
+      }
+      apiOrderType = 'market';
+      side = overrideSide;
+      priceVal = undefined;
+    } else {
+      const mapped = pendingSubtypeToApi(pendingSubtype);
+      apiOrderType = mapped.order_type;
+      side = mapped.side;
+      const p = parseFloat(entryPrice);
+      if (!Number.isFinite(p) || p <= 0) {
+        toast.error('Enter a valid entry price');
+        return;
+      }
+      priceVal = p;
+    }
+
+    if (!Number.isFinite(lots) || lots <= 0) {
+      toast.error('Invalid volume');
+      return;
+    }
+
+    const slNum = sl.trim() ? parseFloat(sl) : NaN;
+    const tpNum = tp.trim() ? parseFloat(tp) : NaN;
+
+    setSubmitting(true);
     try {
       await placeOrder({
         account_id: activeAccount.id,
         symbol,
-        side: finalSide as 'buy' | 'sell',
-        order_type: finalOrderType as any,
+        side,
+        order_type: apiOrderType,
         lots,
-        price: orderType === 'pending' ? parseFloat(entryPrice) : undefined,
-        stop_loss: sl ? parseFloat(sl) : undefined,
-        take_profit: tp ? parseFloat(tp) : undefined,
+        price: priceVal,
+        stop_loss: Number.isFinite(slNum) ? slNum : undefined,
+        take_profit: Number.isFinite(tpNum) ? tpNum : undefined,
       });
-      toast.success(`${(finalOrderType || finalSide).toUpperCase()} ${lots} ${symbol} success!`);
+      sounds.orderPlaced();
+      const label =
+        orderType === 'market'
+          ? `${side.toUpperCase()} ${lots} ${symbol}`
+          : `${apiOrderType} ${side} ${lots} ${symbol}`;
+      toast.success(label);
       onClose();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to place order');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to place order');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -235,30 +288,35 @@ export default function MobileOrderSheet({ symbol, onClose }: MobileOrderSheetPr
              {orderType === 'market' ? (
                 <div className="grid grid-cols-2 gap-4">
                   <button 
+                    type="button"
+                    disabled={submitting}
                     onClick={() => handlePlaceOrder('sell')}
-                    className="h-14 bg-sell rounded-xl flex items-center justify-center text-lg font-black text-white uppercase tracking-widest shadow-xl shadow-sell/20 active:scale-[0.98] transition-all"
+                    className="h-14 bg-sell rounded-xl flex items-center justify-center text-lg font-black text-white uppercase tracking-widest shadow-xl shadow-sell/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none"
                   >
                     Sell
                   </button>
                   <button 
+                    type="button"
+                    disabled={submitting}
                     onClick={() => handlePlaceOrder('buy')}
-                    className="h-14 bg-buy rounded-xl flex items-center justify-center text-lg font-black text-white uppercase tracking-widest shadow-xl shadow-buy/20 active:scale-[0.98] transition-all"
+                    className="h-14 bg-buy rounded-xl flex items-center justify-center text-lg font-black text-white uppercase tracking-widest shadow-xl shadow-buy/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none"
                   >
                     Buy
                   </button>
                 </div>
              ) : (
                 <button 
+                  type="button"
                   onClick={() => handlePlaceOrder()}
-                  disabled={!entryPrice}
+                  disabled={!entryPrice.trim() || submitting}
                   className={clsx(
                     "w-full h-14 rounded-xl flex items-center justify-center text-lg font-black uppercase tracking-widest shadow-xl transition-all active:scale-[0.98]",
-                    entryPrice 
+                    entryPrice.trim() && !submitting
                       ? "bg-[#00D1FF] text-white shadow-[#00D1FF]/20" 
                       : "bg-white/5 text-white/20 border border-white/5 cursor-not-allowed"
                   )}
                 >
-                  Place {pendingSubtype.replace('_', ' ')}
+                  {submitting ? 'Placing…' : `Place ${pendingSubtype.replace('_', ' ')}`}
                 </button>
              )}
           </div>

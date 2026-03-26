@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { clsx } from 'clsx';
 import { useUIStore } from '@/stores/uiStore';
 import { useTradingStore, InstrumentInfo } from '@/stores/tradingStore';
+import toast from 'react-hot-toast';
+import { sounds, unlockAudio } from '@/lib/sounds';
 import Watchlist from '@/components/trading/Watchlist';
 import OrderPanel from '@/components/trading/OrderPanel';
 import PositionsPanel from '@/components/trading/PositionsPanel';
@@ -91,8 +93,17 @@ export default function TradingPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [lotSize, setLotSize] = useState('0.01');
   const [chartTabs, setChartTabs] = useState<string[]>([]);
+  const [orderSubmitting, setOrderSubmitting] = useState(false);
   
-  const { selectedSymbol, prices, instruments, watchlist, setSelectedSymbol } = useTradingStore();
+  const {
+    selectedSymbol,
+    prices,
+    instruments,
+    watchlist,
+    setSelectedSymbol,
+    activeAccount,
+    placeOrder,
+  } = useTradingStore();
   const searchParams = useSearchParams();
   const mobileView = searchParams.get('view') || 'watchlist';
 
@@ -127,6 +138,39 @@ export default function TradingPage() {
       const current = parseFloat(lotSize);
       const next = Math.max(0.01, current + val).toFixed(2);
       setLotSize(next);
+    };
+
+    const placeMarketOrder = async (side: 'buy' | 'sell') => {
+      unlockAudio();
+      if (!activeAccount) {
+        toast.error('No account selected');
+        return;
+      }
+      if (!selectedSymbol?.trim()) {
+        toast.error('Select a symbol');
+        return;
+      }
+      const lots = parseFloat(lotSize);
+      if (!Number.isFinite(lots) || lots <= 0) {
+        toast.error('Invalid lot size');
+        return;
+      }
+      setOrderSubmitting(true);
+      try {
+        await placeOrder({
+          account_id: activeAccount.id,
+          symbol: selectedSymbol,
+          side,
+          order_type: 'market',
+          lots,
+        });
+        sounds.orderPlaced();
+        toast.success(`${side.toUpperCase()} ${lotSize} ${selectedSymbol}`);
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : 'Order failed');
+      } finally {
+        setOrderSubmitting(false);
+      }
     };
 
     return (
@@ -198,12 +242,22 @@ export default function TradingPage() {
                    </div>
 
                    <div className="flex items-center gap-2 flex-1 ml-4 h-[50px]">
-                      <button className="flex-1 h-full bg-sell rounded-xl flex flex-col items-center justify-center shadow-lg shadow-sell/20 active:scale-[0.98] transition-all">
+                      <button
+                        type="button"
+                        disabled={orderSubmitting}
+                        onClick={() => placeMarketOrder('sell')}
+                        className="flex-1 h-full bg-sell rounded-xl flex flex-col items-center justify-center shadow-lg shadow-sell/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none"
+                      >
                         <span className="text-white text-[15px] font-black uppercase tracking-[0.05em]">Sell</span>
                         <span className="text-white/70 text-[10px] font-mono font-bold leading-tight">{price?.bid.toFixed(digits) || '--'}</span>
                       </button>
-                      
-                      <button className="flex-1 h-full bg-buy rounded-xl flex flex-col items-center justify-center shadow-lg shadow-buy/20 active:scale-[0.98] transition-all">
+
+                      <button
+                        type="button"
+                        disabled={orderSubmitting}
+                        onClick={() => placeMarketOrder('buy')}
+                        className="flex-1 h-full bg-buy rounded-xl flex flex-col items-center justify-center shadow-lg shadow-buy/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none"
+                      >
                         <span className="text-white text-[15px] font-black uppercase tracking-[0.05em]">Buy</span>
                         <span className="text-white/70 text-[10px] font-mono font-bold leading-tight">{price?.ask.toFixed(digits) || '--'}</span>
                       </button>
