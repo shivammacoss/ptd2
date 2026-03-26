@@ -19,7 +19,7 @@ from packages.common.src.models import TradingAccount
 from .api import (
     auth, orders, positions, accounts, instruments, deposits,
     websocket_manager, social, business, portfolio, profile, support,
-    notifications, banners,
+    notifications, banners, trading_catalog,
 )
 from .engines.sltp_engine import sltp_engine
 from .engines.copy_engine import copy_engine
@@ -61,6 +61,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(accounts.router, prefix="/api/v1/accounts", tags=["Accounts"])
 app.include_router(instruments.router, prefix="/api/v1/instruments", tags=["Instruments"])
+app.include_router(trading_catalog.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["Orders"])
 app.include_router(positions.router, prefix="/api/v1/positions", tags=["Positions"])
 app.include_router(deposits.router, prefix="/api/v1/wallet", tags=["Wallet"])

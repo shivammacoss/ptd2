@@ -11,7 +11,7 @@ from packages.common.src.database import engine
 logger = logging.getLogger("uvicorn.error")
 from routes import (
     auth, dashboard, users, trades, deposits, banks,
-    config as routes_config, business, social, analytics, bonus, banners,
+    config as routes_config, instruments_admin, business, social, analytics, bonus, banners,
     support, employees, settings, transactions,
 )
 
@@ -66,6 +66,7 @@ app.include_router(trades.router, prefix=prefix)
 app.include_router(deposits.router, prefix=prefix)
 app.include_router(banks.router, prefix=prefix)
 app.include_router(routes_config.router, prefix=prefix)
+app.include_router(instruments_admin.router, prefix=prefix)
 app.include_router(business.router, prefix=prefix)
 app.include_router(social.router, prefix=prefix)
 app.include_router(analytics.router, prefix=prefix)

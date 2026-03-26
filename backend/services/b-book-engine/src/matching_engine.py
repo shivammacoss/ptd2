@@ -24,6 +24,10 @@ from packages.common.src.models import (
 )
 from packages.common.src.redis_client import redis_client, PriceChannel
 from packages.common.src.kafka_client import produce_event, KafkaTopics
+from packages.common.src.instrument_pricing import (
+    resolve_spread_config,
+    apply_spread_and_impact_to_prices,
+)
 
 logger = logging.getLogger("b-book-engine")
 
@@ -163,14 +167,17 @@ class MatchingEngine:
             await asyncio.sleep(0.1)
 
     async def _execute_pending_order(self, order: Order, bid: Decimal, ask: Decimal, db: AsyncSession):
-        fill_price = ask if order.side == OrderSide.BUY else bid
-
         account = await db.get(TradingAccount, order.account_id)
         if not account or not account.is_active:
             order.status = OrderStatus.REJECTED
             return
 
         instrument = await db.get(Instrument, order.instrument_id)
+        pip = instrument.pip_size or Decimal("0.0001")
+        sv, st, pimp = await resolve_spread_config(db, instrument)
+        side_s = "buy" if order.side == OrderSide.BUY else "sell"
+        bid, ask = apply_spread_and_impact_to_prices(bid, ask, side_s, sv, st, pip, pimp)
+        fill_price = ask if order.side == OrderSide.BUY else bid
         margin = (order.lots * instrument.contract_size * fill_price) / Decimal(str(account.leverage))
 
         if margin > account.free_margin:

@@ -42,3 +42,8 @@ async def publish_price(symbol: str, bid: float, ask: float, timestamp: str):
     await redis_client.set(PriceChannel.tick_key(symbol), data)
     await redis_client.publish(PriceChannel.price_channel(symbol), data)
     await redis_client.publish(PriceChannel.PRICE_CHANNEL, data)
+
+
+async def publish_instrument_config_reload() -> None:
+    """Notify services that instrument charge/spread config changed (optional cache bust)."""
+    await redis_client.publish("config:instruments:reload", "1")
