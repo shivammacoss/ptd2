@@ -191,7 +191,9 @@ services:
       - ./backend/services/risk-engine:/app/services/risk_engine
       - ./backend/packages:/app/packages
 
-  # Trader frontend (port 3000)
+  # Trader frontend (port 3000) — PRODUCTION IMAGE: UI edits need a rebuild to show in the browser:
+  #   docker compose build trader-frontend && docker compose up -d trader-frontend
+  # For live reload while coding, run the app on the host instead: cd frontend/trader && npm run dev
   trader-frontend:
     build:
       context: ./frontend/trader
