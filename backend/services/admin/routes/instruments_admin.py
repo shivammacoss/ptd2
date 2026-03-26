@@ -15,7 +15,7 @@ from dependencies import require_permission, write_audit_log
 from packages.common.src.models import User
 from instrument_service import build_admin_instrument_items, upsert_instrument_config
 
-router = APIRouter()
+router = APIRouter(prefix="/instruments", tags=["Instruments"])
 
 
 @router.get("")
