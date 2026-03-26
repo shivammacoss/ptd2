@@ -21,6 +21,10 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
 
+    # Market data provider (Infoway.io)
+    INFOWAY_API_KEY: str = ""
+    INFOWAY_API_URL: str = "https://api.infoway.io"
+
     MARGIN_CALL_LEVEL: float = 80.0
     STOP_OUT_LEVEL: float = 50.0
     MAX_OPEN_TRADES: int = 200

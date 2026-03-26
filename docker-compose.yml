@@ -126,6 +126,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       TIMESCALE_URL: postgresql+asyncpg://protrader:protrader_dev@timescaledb:5432/marketdata
       JWT_SECRET: dev-secret-change-in-production
+      INFOWAY_API_KEY: ${INFOWAY_API_KEY}
+      INFOWAY_API_URL: ${INFOWAY_API_URL:-https://api.infoway.io}
       ENVIRONMENT: development
     volumes:
       - ./backend/services/gateway:/app/services/gateway
@@ -146,6 +148,8 @@ services:
       TIMESCALE_URL: postgresql+asyncpg://protrader:protrader_dev@timescaledb:5432/marketdata
       REDIS_URL: redis://redis:6379/0
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      INFOWAY_API_KEY: ${INFOWAY_API_KEY}
+      INFOWAY_API_URL: ${INFOWAY_API_URL:-https://api.infoway.io}
       ENVIRONMENT: development
     volumes:
       - ./backend/services/market-data:/app/services/market_data
