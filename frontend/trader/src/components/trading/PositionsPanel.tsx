@@ -369,7 +369,7 @@ export default function PositionsPanel() {
                             <td className={clsx(td, 'font-mono')}>
                               {pos.current_price != null ? pos.current_price.toFixed(d) : '—'}
                             </td>
-                            <td className={clsx(td, 'font-mono font-bold', pnl >= 0 ? 'text-buy' : 'text-sell')}>
+                            <td className={clsx(td, 'font-mono font-bold')} style={{ color: pnl >= 0 ? '#2962FF' : '#FF2440' }}>
                               {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
                             </td>
                             <td className={clsx(td, 'text-[10px]')}>
@@ -589,7 +589,7 @@ export default function PositionsPanel() {
                             <td className={td}>{trade.lots}</td>
                             <td className={clsx(td, 'font-mono')}>{trade.open_price.toFixed(d)}</td>
                             <td className={clsx(td, 'font-mono')}>{trade.close_price.toFixed(d)}</td>
-                            <td className={clsx(td, 'font-mono font-bold', pnl >= 0 ? 'text-buy' : 'text-sell')}>
+                            <td className={clsx(td, 'font-mono font-bold')} style={{ color: pnl >= 0 ? '#2962FF' : '#FF2440' }}>
                               {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
                             </td>
                             <td className={clsx(td, 'text-[10px] text-text-tertiary')}>
