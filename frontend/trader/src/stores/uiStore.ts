@@ -29,7 +29,7 @@ interface UIState {
 export const useUIStore = create<UIState>()(
   persist(
     (set, get) => ({
-      theme: 'dark' as Theme,
+      theme: 'light' as Theme,
       watchlistWidth: 220,
       orderPanelWidth: 240,
       bottomPanelHeight: 220,

@@ -317,7 +317,11 @@ export default function UsersPage() {
     try {
       const data = await adminApi.post<{ access_token: string; user_email: string }>(`/users/${user.id}/login-as`);
       if (data.access_token) {
-        const traderUrl = process.env.NEXT_PUBLIC_TRADER_URL || 'http://localhost:3000';
+        // Derive trader URL from current admin hostname (admin.protrader.today → protrader.today)
+        const host = typeof window !== 'undefined' ? window.location.hostname : '';
+        const proto = typeof window !== 'undefined' ? window.location.protocol : 'https:';
+        const traderUrl = process.env.NEXT_PUBLIC_TRADER_URL
+          || (host.startsWith('admin.') ? `${proto}//${host.replace(/^admin\./, '')}` : 'http://localhost:3000');
         window.open(`${traderUrl}/auth/impersonate?token=${encodeURIComponent(data.access_token)}`, '_blank');
         toast.success(`Logged in as ${data.user_email} in new tab`);
       }
