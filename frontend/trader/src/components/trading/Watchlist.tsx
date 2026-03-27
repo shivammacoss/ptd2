@@ -70,7 +70,7 @@ import MobileOrderSheet from '@/components/trading/MobileOrderSheet';
 
 export default function Watchlist() {
   const router = useRouter();
-  const { watchlist, prices, prevPrices, setSelectedSymbol } = useTradingStore();
+  const { watchlist, prices, prevPrices, selectedSymbol, setSelectedSymbol } = useTradingStore();
   const [search, setSearch] = useState('');
   const [segment, setSegment] = useState('All');
   const [flashMap, setFlashMap] = useState<Record<string, 'up' | 'down'>>({});
@@ -128,8 +128,9 @@ export default function Watchlist() {
     return true;
   });
 
-  const handleSwitchToChart = (symbol: string) => {
+  const handleRowClick = (symbol: string) => {
     setSelectedSymbol(symbol);
+    setActiveOrderSymbol(symbol);
     router.push(`/trading?view=chart`);
   };
 
@@ -210,8 +211,11 @@ export default function Watchlist() {
           return (
             <div
               key={symbol}
-              onClick={() => setActiveOrderSymbol(symbol)}
-              className="cursor-pointer hover:bg-bg-hover/30 active:bg-buy/5 transition-all px-3 py-3 border-l-2 border-transparent hover:border-buy/40"
+              onClick={() => handleRowClick(symbol)}
+              className={clsx(
+                'cursor-pointer hover:bg-bg-hover/30 active:bg-buy/5 transition-all px-3 py-3 border-l-2 transition-colors',
+                symbol === selectedSymbol ? 'border-buy bg-buy/5' : 'border-transparent hover:border-buy/40',
+              )}
             >
               <div className="flex items-start justify-between gap-2">
                 {/* ── Left: change badge · symbol name · time + spread ── */}
@@ -243,13 +247,9 @@ export default function Watchlist() {
                   </div>
 
                   {/* Symbol name — large bold */}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); handleSwitchToChart(symbol); }}
-                    className="text-[18px] sm:text-[19px] font-extrabold text-text-primary tracking-tight leading-tight text-left hover:text-buy transition-colors"
-                  >
+                  <div className="text-[18px] sm:text-[19px] font-extrabold text-text-primary tracking-tight leading-tight">
                     {symbol}
-                  </button>
+                  </div>
 
                   {/* time · spread */}
                   <div className="flex items-center gap-2 text-[10px] text-text-tertiary font-mono">
