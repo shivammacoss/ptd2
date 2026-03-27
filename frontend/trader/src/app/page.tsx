@@ -1,124 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import {
   ArrowRight, ShieldCheck, Lock, TrendingDown, Zap, Coins, Clock,
   Gauge, Wallet, BarChart3, MonitorSmartphone, Shield, Headphones,
-  Check, Star, Phone, Gem,
+  Check, Star,
 } from 'lucide-react'
 import TextType from '@/components/landing/TextType'
 import ElectricBorder from '@/components/landing/ElectricBorder'
-
-/* ─── Header ──────────────────────────────────────────────────────────────── */
-function LandingHeader() {
-  return (
-    <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
-      <div className="max-w-7xl mx-auto px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <Link href="/" className="flex items-center gap-2">
-            <Image
-              src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/uploads/168dde75-17e5-4e37-a49d-32737bd908dd/1774370971935-4e1057bd/logo.png"
-              alt="ProTrader"
-              width={160}
-              height={48}
-              className="h-10 w-auto"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-            />
-          </Link>
-
-          <nav className="hidden md:flex items-center gap-7">
-            {[
-              { href: '/', label: 'Home' },
-              { href: '#features', label: 'Features' },
-              { href: '#instruments', label: 'Markets' },
-              { href: '#testimonials', label: 'Reviews' },
-            ].map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                className="text-sm font-medium text-gray-500 hover:text-blue-600 transition-colors"
-              >
-                {item.label}
-              </a>
-            ))}
-          </nav>
-
-          <div className="flex items-center gap-3">
-            <Link
-              href="/auth/login"
-              className="text-sm font-semibold text-gray-700 hover:text-blue-600 transition-colors px-4 py-2"
-            >
-              Sign In
-            </Link>
-            <Link
-              href="/auth/register"
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
-            >
-              Get Started
-            </Link>
-          </div>
-        </div>
-      </div>
-    </header>
-  )
-}
-
-/* ─── Footer ──────────────────────────────────────────────────────────────── */
-function LandingFooter() {
-  return (
-    <footer className="bg-white border-t border-gray-200 py-12">
-      <div className="max-w-7xl mx-auto px-6 lg:px-8">
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-10 mb-10">
-          <div className="lg:col-span-2">
-            <Image
-              src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/uploads/168dde75-17e5-4e37-a49d-32737bd908dd/1774370971935-4e1057bd/logo.png"
-              alt="ProTrader"
-              width={120}
-              height={36}
-              className="h-9 w-auto mb-4"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-            />
-            <p className="text-gray-500 text-sm leading-relaxed mb-3 max-w-sm">
-              Professional multi-asset trading platform. Licensed under Investment Dealer Licence No. MAK21098161, St. Lucia.
-            </p>
-            <p className="text-gray-500 text-sm">
-              <span className="font-medium text-gray-900">UK Office:</span><br />
-              Office 9364hn, 3 Fitzroy Place, Glasgow City Centre, UK, G3 7RH
-            </p>
-          </div>
-          <div>
-            <p className="font-semibold text-gray-900 mb-4">Products</p>
-            <ul className="space-y-2 text-sm text-gray-500">
-              <li><Link href="/auth/register" className="hover:text-blue-600 transition-colors">Open Live Account</Link></li>
-              <li><Link href="/auth/register" className="hover:text-blue-600 transition-colors">Demo Account</Link></li>
-              <li><Link href="/auth/login" className="hover:text-blue-600 transition-colors">Forex Trading</Link></li>
-              <li><Link href="/auth/login" className="hover:text-blue-600 transition-colors">Metals (XAU/USD)</Link></li>
-            </ul>
-          </div>
-          <div>
-            <p className="font-semibold text-gray-900 mb-4">Support</p>
-            <ul className="space-y-2 text-sm text-gray-500">
-              <li><Link href="/auth/login" className="hover:text-blue-600 transition-colors">Contact Support</Link></li>
-              <li className="flex items-center gap-2">
-                <Phone className="w-4 h-4" />
-                <span>+1 (908) 228-0305</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-        <div className="border-t border-gray-200 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-gray-400 text-sm">&copy; {new Date().getFullYear()} ProTrader. All rights reserved.</p>
-          <div className="flex items-center gap-5 text-sm text-gray-400">
-            <a href="#" className="hover:text-blue-600 transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-blue-600 transition-colors">Terms of Service</a>
-            <a href="#" className="hover:text-blue-600 transition-colors">Risk Disclosure</a>
-          </div>
-        </div>
-      </div>
-    </footer>
-  )
-}
+import LandingHeader from '@/components/landing/LandingHeader'
+import LandingFooter from '@/components/landing/LandingFooter'
 
 /* ─── Page ────────────────────────────────────────────────────────────────── */
 export default function HomePage() {

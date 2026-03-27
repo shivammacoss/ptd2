@@ -22,11 +22,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Once auth is checked/initialized, handle redirects
     if (isInitialized) {
       const isAuthPage = pathname?.startsWith('/auth');
-      const isLanding = pathname === '/';
+      const isPublic = pathname === '/' || pathname === '/privacy' || pathname === '/terms' || pathname === '/risk';
 
-      if (!isAuthenticated && !isAuthPage && !isLanding) {
+      if (!isAuthenticated && !isAuthPage && !isPublic) {
         router.push('/auth/login');
-      } else if (isAuthenticated && (isAuthPage || isLanding)) {
+      } else if (isAuthenticated && (isAuthPage || pathname === '/')) {
         router.push('/trading');
       }
     }
