@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTradingStore } from '@/stores/tradingStore';
 import { clsx } from 'clsx';
 import api from '@/lib/api/client';
 import toast from 'react-hot-toast';
 import { sounds, unlockAudio } from '@/lib/sounds';
-import { RefreshCw, Download, Pencil, Check, X } from 'lucide-react';
+import { RefreshCw, Download, Pencil, Check, X, ChevronDown, TrendingUp, TrendingDown, Layers } from 'lucide-react';
 
 interface ClosedTrade {
   id: string;
@@ -24,6 +24,7 @@ interface ClosedTrade {
 
 type CloseModal = { id: string; symbol: string; side: string; lots: number; closeLots: string } | null;
 type SltpEdit = { positionId: string; sl: string; tp: string } | null;
+type BulkCloseType = 'all' | 'profit' | 'loss';
 
 type TabId = 'open' | 'pending' | 'history';
 
@@ -61,8 +62,26 @@ export default function PositionsPanel() {
   const [toolbarBusy, setToolbarBusy] = useState(false);
   const [sltpEdit, setSltpEdit] = useState<SltpEdit>(null);
   const [sltpSaving, setSltpSaving] = useState(false);
+  const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
+  const [bulkConfirm, setBulkConfirm] = useState<BulkCloseType | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const bulkMenuRef = useRef<HTMLDivElement>(null);
 
   const totalPnl = positions.reduce((s, p) => s + (p.profit || 0), 0);
+
+  const profitPositions = positions.filter((p) => (p.profit || 0) > 0);
+  const lossPositions = positions.filter((p) => (p.profit || 0) < 0);
+
+  useEffect(() => {
+    if (!bulkMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (bulkMenuRef.current && !bulkMenuRef.current.contains(e.target as Node)) {
+        setBulkMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [bulkMenuOpen]);
 
   const getDigits = (symbol: string) => {
     const inst = instruments.find((i) => i.symbol === symbol);
@@ -123,6 +142,49 @@ export default function PositionsPanel() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const executeBulkClose = async (type: BulkCloseType) => {
+    setBulkConfirm(null);
+    setBulkBusy(true);
+    const targets =
+      type === 'all' ? positions : type === 'profit' ? profitPositions : lossPositions;
+    if (targets.length === 0) {
+      toast(
+        type === 'profit'
+          ? 'No profitable positions to close'
+          : type === 'loss'
+            ? 'No losing positions to close'
+            : 'No open positions',
+        { icon: 'ℹ️' },
+      );
+      setBulkBusy(false);
+      return;
+    }
+    let closed = 0;
+    let failed = 0;
+    for (const pos of targets) {
+      try {
+        const res = await api.post<{ profit?: number; close_price?: number }>(
+          `/positions/${pos.id}/close`,
+          {},
+        );
+        const pnl = res.profit ?? 0;
+        pnl >= 0 ? sounds.profit() : sounds.loss();
+        removePosition(pos.id);
+        closed++;
+      } catch {
+        failed++;
+      }
+    }
+    if (closed > 0)
+      toast.success(`${closed} position${closed > 1 ? 's' : ''} closed successfully`);
+    if (failed > 0)
+      toast.error(`${failed} position${failed > 1 ? 's' : ''} failed to close`);
+    refreshPositions();
+    refreshAccount();
+    void loadHistory();
+    setBulkBusy(false);
   };
 
   const saveSltpEdit = async () => {
@@ -306,15 +368,66 @@ export default function PositionsPanel() {
           </div>
 
           <div className="flex items-center justify-between gap-2 px-2 py-1.5 border-b border-border-glass/60 bg-bg-primary/20 shrink-0">
-            <button
-              type="button"
-              onClick={() => void handleRefresh()}
-              disabled={toolbarBusy || (activeTab === 'history' && historyLoading)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-semibold text-text-secondary bg-bg-secondary/80 border border-border-glass hover:bg-bg-hover hover:text-text-primary disabled:opacity-50"
-            >
-              <RefreshCw className={clsx('w-3.5 h-3.5', toolbarBusy && 'animate-spin')} />
-              Refresh
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => void handleRefresh()}
+                disabled={toolbarBusy || (activeTab === 'history' && historyLoading)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-semibold text-text-secondary bg-bg-secondary/80 border border-border-glass hover:bg-bg-hover hover:text-text-primary disabled:opacity-50"
+              >
+                <RefreshCw className={clsx('w-3.5 h-3.5', toolbarBusy && 'animate-spin')} />
+                Refresh
+              </button>
+              {activeTab === 'open' && positions.length > 0 && (
+                <div className="relative" ref={bulkMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setBulkMenuOpen((v) => !v)}
+                    disabled={bulkBusy}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-semibold bg-sell/15 text-sell border border-sell/30 hover:bg-sell/25 disabled:opacity-50 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                    {bulkBusy ? 'Closing…' : 'Close'}
+                    <ChevronDown
+                      className={clsx('w-3 h-3 transition-transform', bulkMenuOpen && 'rotate-180')}
+                    />
+                  </button>
+                  {bulkMenuOpen && (
+                    <div className="absolute left-0 top-full mt-1 z-30 bg-bg-secondary border border-border-glass rounded-xl shadow-2xl overflow-hidden min-w-[168px]">
+                      <button
+                        type="button"
+                        onClick={() => { setBulkMenuOpen(false); setBulkConfirm('all'); }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-text-primary hover:bg-bg-hover transition-colors"
+                      >
+                        <Layers className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
+                        <span className="flex-1 text-left">Close All</span>
+                        <span className="text-text-tertiary tabular-nums text-[10px]">({positions.length})</span>
+                      </button>
+                      <div className="h-px bg-border-glass/50 mx-3" />
+                      <button
+                        type="button"
+                        onClick={() => { setBulkMenuOpen(false); setBulkConfirm('profit'); }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-text-primary hover:bg-bg-hover transition-colors"
+                      >
+                        <TrendingUp className="w-3.5 h-3.5 shrink-0" style={{ color: '#2962FF' }} />
+                        <span className="flex-1 text-left">Close Profit</span>
+                        <span className="text-text-tertiary tabular-nums text-[10px]">({profitPositions.length})</span>
+                      </button>
+                      <div className="h-px bg-border-glass/50 mx-3" />
+                      <button
+                        type="button"
+                        onClick={() => { setBulkMenuOpen(false); setBulkConfirm('loss'); }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-text-primary hover:bg-bg-hover transition-colors"
+                      >
+                        <TrendingDown className="w-3.5 h-3.5 shrink-0" style={{ color: '#FF2440' }} />
+                        <span className="flex-1 text-left">Close Loss</span>
+                        <span className="text-text-tertiary tabular-nums text-[10px]">({lossPositions.length})</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <button
               type="button"
               onClick={exportCurrentCsv}
@@ -613,6 +726,77 @@ export default function PositionsPanel() {
           </div>
         </div>
       </div>
+
+      {bulkConfirm && (() => {
+        const countMap = { all: positions.length, profit: profitPositions.length, loss: lossPositions.length };
+        const labelMap = {
+          all: 'Close All Positions',
+          profit: 'Close Profitable Positions',
+          loss: 'Close Losing Positions',
+        };
+        const descMap = {
+          all: `Close all ${positions.length} open position${positions.length !== 1 ? 's' : ''} at market price.`,
+          profit: `Close ${profitPositions.length} profitable position${profitPositions.length !== 1 ? 's' : ''} at market price.`,
+          loss: `Close ${lossPositions.length} losing position${lossPositions.length !== 1 ? 's' : ''} at market price.`,
+        };
+        const count = countMap[bulkConfirm];
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in px-4">
+            <div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setBulkConfirm(null)}
+            />
+            <div className="relative bg-bg-secondary border border-border-glass rounded-2xl shadow-2xl w-full max-w-sm p-6 overflow-hidden">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-bold text-text-primary">{labelMap[bulkConfirm]}</h3>
+                <button
+                  type="button"
+                  onClick={() => setBulkConfirm(null)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-bg-hover text-text-tertiary hover:text-text-primary transition-colors"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p className="text-sm text-text-secondary mb-2">{descMap[bulkConfirm]}</p>
+              {count === 0 ? (
+                <>
+                  <p className="text-xs text-text-tertiary mb-4">No matching positions found.</p>
+                  <button
+                    type="button"
+                    onClick={() => setBulkConfirm(null)}
+                    className="w-full py-3 bg-bg-hover text-text-primary font-bold rounded-xl"
+                  >
+                    OK
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-text-tertiary mb-6">This action cannot be undone.</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBulkConfirm(null)}
+                      className="flex-1 py-3 bg-bg-hover text-text-primary font-bold rounded-xl active:scale-95 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void executeBulkClose(bulkConfirm)}
+                      disabled={bulkBusy}
+                      className="flex-1 py-3 bg-sell text-white font-bold rounded-xl shadow-lg shadow-sell/20 active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      {bulkBusy ? 'Closing…' : 'Confirm'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {closeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in px-4">
