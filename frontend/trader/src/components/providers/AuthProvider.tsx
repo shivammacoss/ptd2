@@ -22,13 +22,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Once auth is checked/initialized, handle redirects
     if (isInitialized) {
       const isAuthPage = pathname?.startsWith('/auth');
-      
-      if (!isAuthenticated && !isAuthPage) {
-        // Only redirect if not on an auth page
+      const isLanding = pathname === '/';
+
+      if (!isAuthenticated && !isAuthPage && !isLanding) {
         router.push('/auth/login');
-      } else if (isAuthenticated && isAuthPage) {
-        // Redir authenticated users away from login
-        router.push('/dashboard');
+      } else if (isAuthenticated && (isAuthPage || isLanding)) {
+        router.push('/trading');
       }
     }
   }, [isInitialized, isAuthenticated, pathname, router]);
