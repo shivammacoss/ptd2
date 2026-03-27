@@ -6,7 +6,7 @@ import { clsx } from 'clsx';
 import api from '@/lib/api/client';
 import toast from 'react-hot-toast';
 import { sounds, unlockAudio } from '@/lib/sounds';
-import { RefreshCw, Download } from 'lucide-react';
+import { RefreshCw, Download, Pencil, Check, X } from 'lucide-react';
 
 interface ClosedTrade {
   id: string;
@@ -23,6 +23,7 @@ interface ClosedTrade {
 }
 
 type CloseModal = { id: string; symbol: string; side: string; lots: number; closeLots: string } | null;
+type SltpEdit = { positionId: string; sl: string; tp: string } | null;
 
 type TabId = 'open' | 'pending' | 'history';
 
@@ -58,6 +59,8 @@ export default function PositionsPanel() {
   const [closeModal, setCloseModal] = useState<CloseModal>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toolbarBusy, setToolbarBusy] = useState(false);
+  const [sltpEdit, setSltpEdit] = useState<SltpEdit>(null);
+  const [sltpSaving, setSltpSaving] = useState(false);
 
   const totalPnl = positions.reduce((s, p) => s + (p.profit || 0), 0);
 
@@ -119,6 +122,26 @@ export default function PositionsPanel() {
       toast.error(e instanceof Error ? e.message : 'Close failed');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const saveSltpEdit = async () => {
+    if (!sltpEdit) return;
+    setSltpSaving(true);
+    try {
+      const body: Record<string, unknown> = {};
+      const slVal = sltpEdit.sl.trim();
+      const tpVal = sltpEdit.tp.trim();
+      if (slVal !== '' && slVal !== '—') body.stop_loss = parseFloat(slVal);
+      if (tpVal !== '' && tpVal !== '—') body.take_profit = parseFloat(tpVal);
+      await api.put(`/positions/${sltpEdit.positionId}`, body);
+      toast.success('SL/TP updated');
+      setSltpEdit(null);
+      refreshPositions();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to update SL/TP');
+    } finally {
+      setSltpSaving(false);
     }
   };
 
@@ -229,7 +252,7 @@ export default function PositionsPanel() {
         {
           label: 'Floating PL',
           value: totalPnl,
-          color: totalPnl >= 0 ? 'text-success' : 'text-sell',
+          color: totalPnl >= 0 ? 'text-buy' : 'text-sell',
           signed: true as const,
         },
       ]
@@ -346,13 +369,71 @@ export default function PositionsPanel() {
                             <td className={clsx(td, 'font-mono')}>
                               {pos.current_price != null ? pos.current_price.toFixed(d) : '—'}
                             </td>
-                            <td className={clsx(td, 'font-mono font-bold', pnl >= 0 ? 'text-success' : 'text-sell')}>
+                            <td className={clsx(td, 'font-mono font-bold', pnl >= 0 ? 'text-buy' : 'text-sell')}>
                               {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
                             </td>
-                            <td className={clsx(td, 'text-[10px] text-text-tertiary')}>
-                              SL: {pos.stop_loss != null ? pos.stop_loss.toFixed(d) : '—'}
-                              <br />
-                              TP: {pos.take_profit != null ? pos.take_profit.toFixed(d) : '—'}
+                            <td className={clsx(td, 'text-[10px]')}>
+                              {sltpEdit && sltpEdit.positionId === pos.id ? (
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-text-tertiary w-5">SL:</span>
+                                    <input
+                                      type="number"
+                                      step="0.00001"
+                                      value={sltpEdit.sl}
+                                      onChange={(e) => setSltpEdit({ ...sltpEdit, sl: e.target.value })}
+                                      className="w-20 px-1 py-0.5 text-[10px] font-mono bg-bg-input border border-border-glass rounded text-text-primary"
+                                      placeholder="—"
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-text-tertiary w-5">TP:</span>
+                                    <input
+                                      type="number"
+                                      step="0.00001"
+                                      value={sltpEdit.tp}
+                                      onChange={(e) => setSltpEdit({ ...sltpEdit, tp: e.target.value })}
+                                      className="w-20 px-1 py-0.5 text-[10px] font-mono bg-bg-input border border-border-glass rounded text-text-primary"
+                                      placeholder="—"
+                                    />
+                                  </div>
+                                  <div className="flex gap-1 mt-0.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => void saveSltpEdit()}
+                                      disabled={sltpSaving}
+                                      className="p-0.5 rounded bg-buy/15 text-buy hover:bg-buy/25 disabled:opacity-50"
+                                      title="Save"
+                                    >
+                                      <Check className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSltpEdit(null)}
+                                      className="p-0.5 rounded bg-sell/15 text-sell hover:bg-sell/25"
+                                      title="Cancel"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setSltpEdit({
+                                    positionId: pos.id,
+                                    sl: pos.stop_loss != null ? pos.stop_loss.toFixed(d) : '',
+                                    tp: pos.take_profit != null ? pos.take_profit.toFixed(d) : '',
+                                  })}
+                                  className="text-left group cursor-pointer"
+                                  title="Click to edit SL/TP"
+                                >
+                                  <span className="text-text-tertiary">SL: {pos.stop_loss != null ? pos.stop_loss.toFixed(d) : '—'}</span>
+                                  <br />
+                                  <span className="text-text-tertiary">TP: {pos.take_profit != null ? pos.take_profit.toFixed(d) : '—'}</span>
+                                  <Pencil className="w-2.5 h-2.5 inline ml-1 opacity-0 group-hover:opacity-60 text-text-tertiary transition-opacity" />
+                                </button>
+                              )}
                             </td>
                             <td className={clsx(td, 'text-right pr-2')}>
                               <button
@@ -508,7 +589,7 @@ export default function PositionsPanel() {
                             <td className={td}>{trade.lots}</td>
                             <td className={clsx(td, 'font-mono')}>{trade.open_price.toFixed(d)}</td>
                             <td className={clsx(td, 'font-mono')}>{trade.close_price.toFixed(d)}</td>
-                            <td className={clsx(td, 'font-mono font-bold', pnl >= 0 ? 'text-success' : 'text-sell')}>
+                            <td className={clsx(td, 'font-mono font-bold', pnl >= 0 ? 'text-buy' : 'text-sell')}>
                               {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
                             </td>
                             <td className={clsx(td, 'text-[10px] text-text-tertiary')}>
