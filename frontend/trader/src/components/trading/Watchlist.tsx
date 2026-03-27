@@ -213,7 +213,7 @@ export default function Watchlist() {
               key={symbol}
               onClick={() => handleRowClick(symbol)}
               className={clsx(
-                'cursor-pointer hover:bg-bg-hover/30 active:bg-buy/5 transition-all px-3 py-3 border-l-2 transition-colors',
+                'cursor-pointer hover:bg-bg-hover/30 active:bg-buy/5 transition-colors px-3 py-3 border-l-2',
                 symbol === selectedSymbol ? 'border-buy bg-buy/5' : 'border-transparent hover:border-buy/40',
               )}
             >
