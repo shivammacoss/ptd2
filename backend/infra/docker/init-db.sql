@@ -202,6 +202,24 @@ INSERT INTO instruments (symbol, display_name, segment_id, base_currency, quote_
     ('NVDA', 'Nvidia Corp.', (SELECT id FROM instrument_segments WHERE name='stocks'), 'NVDA', 'USD', 2, 0.01),
     ('NFLX', 'Netflix Inc.', (SELECT id FROM instrument_segments WHERE name='stocks'), 'NFLX', 'USD', 2, 0.01);
 
+-- ─── Fix contract sizes (default 100000 is correct only for forex) ────────────
+-- Precious metals: 100 oz per standard lot
+UPDATE instruments SET contract_size = 100    WHERE symbol IN ('XAUUSD', 'XPTUSD');
+-- Silver: 5000 oz per standard lot
+UPDATE instruments SET contract_size = 5000   WHERE symbol = 'XAGUSD';
+-- Energy: barrels / MMBtu per standard lot
+UPDATE instruments SET contract_size = 1000   WHERE symbol IN ('USOIL', 'UKOIL');
+UPDATE instruments SET contract_size = 10000  WHERE symbol = 'NATGAS';
+-- Indices: 1 unit per lot  (P&L = lots × 1 × point_change)
+UPDATE instruments SET contract_size = 1      WHERE symbol IN ('US30','US500','NAS100','UK100','GER40','US100','JPN225','AUS200');
+-- Crypto major: 1 coin per lot
+UPDATE instruments SET contract_size = 1      WHERE symbol IN ('BTCUSD','ETHUSD','LTCUSD','SOLUSD','BNBUSD');
+-- Crypto small-price: 10000 units per lot  (keeps notional ~$3k-5k per lot)
+UPDATE instruments SET contract_size = 10000  WHERE symbol IN ('XRPUSD','ADAUSD');
+-- Micro-price crypto: keep 100000 default (DOGEUSD stays at 100000)
+-- Stocks: 100 shares per lot
+UPDATE instruments SET contract_size = 100    WHERE symbol IN ('AAPL','TSLA','AMZN','GOOGL','MSFT','META','NVDA','NFLX');
+
 CREATE TABLE instrument_configs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     instrument_id UUID NOT NULL UNIQUE REFERENCES instruments(id) ON DELETE CASCADE,
