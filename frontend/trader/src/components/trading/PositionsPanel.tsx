@@ -378,55 +378,6 @@ export default function PositionsPanel() {
                 <RefreshCw className={clsx('w-3.5 h-3.5', toolbarBusy && 'animate-spin')} />
                 Refresh
               </button>
-              {activeTab === 'open' && positions.length > 0 && (
-                <div className="relative" ref={bulkMenuRef}>
-                  <button
-                    type="button"
-                    onClick={() => setBulkMenuOpen((v) => !v)}
-                    disabled={bulkBusy}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-semibold bg-sell/15 text-sell border border-sell/30 hover:bg-sell/25 disabled:opacity-50 transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                    {bulkBusy ? 'Closing…' : 'Close'}
-                    <ChevronDown
-                      className={clsx('w-3 h-3 transition-transform', bulkMenuOpen && 'rotate-180')}
-                    />
-                  </button>
-                  {bulkMenuOpen && (
-                    <div className="absolute left-0 top-full mt-1 z-30 bg-bg-secondary border border-border-glass rounded-xl shadow-2xl overflow-hidden min-w-[168px]">
-                      <button
-                        type="button"
-                        onClick={() => { setBulkMenuOpen(false); setBulkConfirm('all'); }}
-                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-text-primary hover:bg-bg-hover transition-colors"
-                      >
-                        <Layers className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
-                        <span className="flex-1 text-left">Close All</span>
-                        <span className="text-text-tertiary tabular-nums text-[10px]">({positions.length})</span>
-                      </button>
-                      <div className="h-px bg-border-glass/50 mx-3" />
-                      <button
-                        type="button"
-                        onClick={() => { setBulkMenuOpen(false); setBulkConfirm('profit'); }}
-                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-text-primary hover:bg-bg-hover transition-colors"
-                      >
-                        <TrendingUp className="w-3.5 h-3.5 shrink-0" style={{ color: '#2962FF' }} />
-                        <span className="flex-1 text-left">Close Profit</span>
-                        <span className="text-text-tertiary tabular-nums text-[10px]">({profitPositions.length})</span>
-                      </button>
-                      <div className="h-px bg-border-glass/50 mx-3" />
-                      <button
-                        type="button"
-                        onClick={() => { setBulkMenuOpen(false); setBulkConfirm('loss'); }}
-                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-text-primary hover:bg-bg-hover transition-colors"
-                      >
-                        <TrendingDown className="w-3.5 h-3.5 shrink-0" style={{ color: '#FF2440' }} />
-                        <span className="flex-1 text-left">Close Loss</span>
-                        <span className="text-text-tertiary tabular-nums text-[10px]">({lossPositions.length})</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
             <button
               type="button"
@@ -870,6 +821,45 @@ export default function PositionsPanel() {
                   className="flex-1 py-3 bg-sell text-white font-bold rounded-xl shadow-lg shadow-sell/20 active:scale-95 transition-all disabled:opacity-50"
                 >
                   {submitting ? 'Closing...' : 'Close'}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <div className="flex-1 h-px bg-border-glass/50" />
+                <span className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">Bulk Close</span>
+                <div className="flex-1 h-px bg-border-glass/50" />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setCloseModal(null); setBulkConfirm('all'); }}
+                  disabled={bulkBusy || positions.length === 0}
+                  className="flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl bg-bg-primary/60 border border-border-glass hover:bg-bg-hover active:scale-95 transition-all disabled:opacity-40"
+                >
+                  <Layers className="w-4 h-4 text-text-secondary" />
+                  <span className="text-[10px] font-bold text-text-primary">Close All</span>
+                  <span className="text-[10px] text-text-tertiary tabular-nums">({positions.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setCloseModal(null); setBulkConfirm('profit'); }}
+                  disabled={bulkBusy || profitPositions.length === 0}
+                  className="flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl bg-buy/5 border border-buy/20 hover:bg-buy/10 active:scale-95 transition-all disabled:opacity-40"
+                >
+                  <TrendingUp className="w-4 h-4" style={{ color: '#2962FF' }} />
+                  <span className="text-[10px] font-bold" style={{ color: '#2962FF' }}>Profit</span>
+                  <span className="text-[10px] text-text-tertiary tabular-nums">({profitPositions.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setCloseModal(null); setBulkConfirm('loss'); }}
+                  disabled={bulkBusy || lossPositions.length === 0}
+                  className="flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl bg-sell/5 border border-sell/20 hover:bg-sell/10 active:scale-95 transition-all disabled:opacity-40"
+                >
+                  <TrendingDown className="w-4 h-4" style={{ color: '#FF2440' }} />
+                  <span className="text-[10px] font-bold" style={{ color: '#FF2440' }}>Loss</span>
+                  <span className="text-[10px] text-text-tertiary tabular-nums">({lossPositions.length})</span>
                 </button>
               </div>
             </div>
