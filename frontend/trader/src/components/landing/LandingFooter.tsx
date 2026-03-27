@@ -14,7 +14,6 @@ export default function LandingFooter() {
               width={120}
               height={36}
               className="h-9 w-auto mb-4"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
             />
             <p className="text-gray-500 text-sm leading-relaxed mb-3 max-w-sm">
               Professional multi-asset trading platform. Licensed under Investment Dealer Licence No. MAK21098161, St. Lucia.
