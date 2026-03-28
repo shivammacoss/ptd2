@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
 import { sounds, unlockAudio } from '@/lib/sounds';
 import { getDigits } from '@/lib/utils';
+import { getMarketStatus } from '@/lib/marketHours';
 
 type OrderSide = 'buy' | 'sell';
 type OrderType = 'market' | 'limit' | 'stop' | 'stop_limit';
@@ -45,9 +46,17 @@ function AccountSummaryBar() {
 }
 
 export default function OrderPanel() {
-  const { selectedSymbol, prices, activeAccount } = useTradingStore();
+  const { selectedSymbol, prices, activeAccount, instruments } = useTradingStore();
   const { oneClickTrading, setOneClickTrading } = useUIStore();
   const tick = prices[selectedSymbol];
+
+  const instrumentInfo = useTradingStore((s) => s.instruments.find((i) => i.symbol === selectedSymbol));
+  const segment = (instrumentInfo as any)?.segment as string | undefined;
+  const marketStatus = useMemo(
+    () => getMarketStatus(selectedSymbol, segment),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedSymbol, segment, Math.floor(Date.now() / 60_000)], // recompute each minute
+  );
 
   const [side, setSide] = useState<OrderSide>('buy');
   const [orderType, setOrderType] = useState<OrderType>('market');
@@ -61,7 +70,6 @@ export default function OrderPanel() {
 
   const lotPresets = ['0.01', '0.05', '0.1', '0.5', '1.0'];
 
-  const instrumentInfo = useTradingStore((s) => s.instruments.find((i) => i.symbol === selectedSymbol));
   const contractSize = instrumentInfo?.contract_size || 100000;
 
   const marginRequired = useMemo(() => {
@@ -89,6 +97,10 @@ export default function OrderPanel() {
   const placeOrder = async () => {
     unlockAudio();
     if (!activeAccount) { toast.error('No account'); return; }
+    if (orderType === 'market' && !marketStatus.isOpen) {
+      toast.error(marketStatus.reason || 'Market is closed');
+      return;
+    }
     setSubmitting(true);
     try {
       await api.post('/orders/', {
@@ -114,6 +126,10 @@ export default function OrderPanel() {
 
   const handleQuickTrade = (s: OrderSide) => {
     unlockAudio();
+    if (!marketStatus.isOpen) {
+      toast.error(marketStatus.reason || 'Market is closed');
+      return;
+    }
     if (oneClickTrading) {
       setSide(s);
       placeOrder();
@@ -126,8 +142,21 @@ export default function OrderPanel() {
     <div className="h-full flex flex-col bg-bg-secondary border-l border-border-glass">
       {/* Symbol header */}
       <div className="px-3 py-2 border-b border-border-glass">
-        <div className="text-sm font-bold text-text-primary">{selectedSymbol}</div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm font-bold text-text-primary">{selectedSymbol}</div>
+          <span className={clsx(
+            'text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full',
+            marketStatus.isOpen
+              ? 'bg-buy/15 text-buy'
+              : 'bg-sell/15 text-sell',
+          )}>
+            {marketStatus.isOpen ? '● OPEN' : '● CLOSED'}
+          </span>
+        </div>
         {tick && <div className="text-xxs text-text-tertiary tabular-nums font-mono">Spread: {(tick.spread / (instrumentInfo?.pip_size || 0.0001)).toFixed(1)} pips</div>}
+        {!marketStatus.isOpen && (
+          <div className="mt-1 text-[10px] text-sell/80 leading-snug">{marketStatus.reason}</div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
@@ -135,23 +164,29 @@ export default function OrderPanel() {
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => handleQuickTrade('sell')}
+            disabled={!marketStatus.isOpen}
             className={clsx(
               'py-3 rounded-xl text-center transition-all duration-150',
-              side === 'sell' ? 'skeu-btn-sell ring-1 ring-sell/30' : 'glass-light hover:bg-sell/10',
+              !marketStatus.isOpen
+                ? 'opacity-40 cursor-not-allowed glass-light'
+                : side === 'sell' ? 'skeu-btn-sell ring-1 ring-sell/30' : 'glass-light hover:bg-sell/10',
             )}
           >
-            <div className={clsx('text-xs font-bold', side === 'sell' ? 'text-white' : 'text-sell')}>SELL</div>
-            {tick && <div className={clsx('text-sm font-mono tabular-nums mt-0.5', side === 'sell' ? 'text-white/80' : 'text-sell/80')}>{tick.bid.toFixed(getDigits(selectedSymbol))}</div>}
+            <div className={clsx('text-xs font-bold', side === 'sell' && marketStatus.isOpen ? 'text-white' : 'text-sell')}>SELL</div>
+            {tick && <div className={clsx('text-sm font-mono tabular-nums mt-0.5', side === 'sell' && marketStatus.isOpen ? 'text-white/80' : 'text-sell/80')}>{tick.bid.toFixed(getDigits(selectedSymbol))}</div>}
           </button>
           <button
             onClick={() => handleQuickTrade('buy')}
+            disabled={!marketStatus.isOpen}
             className={clsx(
               'py-3 rounded-xl text-center transition-all duration-150',
-              side === 'buy' ? 'skeu-btn-buy ring-1 ring-buy/30' : 'glass-light hover:bg-buy/10',
+              !marketStatus.isOpen
+                ? 'opacity-40 cursor-not-allowed glass-light'
+                : side === 'buy' ? 'skeu-btn-buy ring-1 ring-buy/30' : 'glass-light hover:bg-buy/10',
             )}
           >
-            <div className={clsx('text-xs font-bold', side === 'buy' ? 'text-white' : 'text-buy')}>BUY</div>
-            {tick && <div className={clsx('text-sm font-mono tabular-nums mt-0.5', side === 'buy' ? 'text-white/80' : 'text-buy/80')}>{tick.ask.toFixed(getDigits(selectedSymbol))}</div>}
+            <div className={clsx('text-xs font-bold', side === 'buy' && marketStatus.isOpen ? 'text-white' : 'text-buy')}>BUY</div>
+            {tick && <div className={clsx('text-sm font-mono tabular-nums mt-0.5', side === 'buy' && marketStatus.isOpen ? 'text-white/80' : 'text-buy/80')}>{tick.ask.toFixed(getDigits(selectedSymbol))}</div>}
           </button>
         </div>
 
@@ -278,10 +313,17 @@ export default function OrderPanel() {
           )}
         </div>
 
+        {/* Market closed banner for pending order hint */}
+        {!marketStatus.isOpen && orderType === 'market' && (
+          <div className="rounded-lg border border-sell/20 bg-sell/5 px-3 py-2 text-[10px] text-sell leading-snug">
+            <span className="font-bold">Market closed.</span> Switch to Limit or Stop order to pre-place a trade for when the market reopens.
+          </div>
+        )}
+
         {/* Place order button */}
         <button
           onClick={placeOrder}
-          disabled={submitting || (marginRequired > (activeAccount?.free_margin || 0))}
+          disabled={submitting || (orderType === 'market' && !marketStatus.isOpen) || (marginRequired > (activeAccount?.free_margin || 0))}
           className={clsx(
             'w-full py-3.5 rounded-xl text-sm font-bold transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed text-white',
             side === 'buy' ? 'skeu-btn-buy' : 'skeu-btn-sell',

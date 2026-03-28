@@ -8,6 +8,7 @@ import { useUIStore, WATCHLIST_LAYOUT } from '@/stores/uiStore';
 import { useTradingStore, InstrumentInfo } from '@/stores/tradingStore';
 import toast from 'react-hot-toast';
 import { sounds, unlockAudio } from '@/lib/sounds';
+import { getMarketStatus } from '@/lib/marketHours';
 import Watchlist from '@/components/trading/Watchlist';
 import OrderPanel from '@/components/trading/OrderPanel';
 import PositionsPanel from '@/components/trading/PositionsPanel';
@@ -102,7 +103,7 @@ export default function TradingPage() {
   const [lotSize, setLotSize] = useState('0.01');
   const [chartTabs, setChartTabs] = useState<string[]>([]);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
-  
+
   const {
     selectedSymbol,
     prices,
@@ -112,6 +113,9 @@ export default function TradingPage() {
     activeAccount,
     placeOrder,
   } = useTradingStore();
+
+  const instrumentInfo = instruments.find((i: InstrumentInfo) => i.symbol === selectedSymbol);
+  const mobileMarketStatus = getMarketStatus(selectedSymbol, (instrumentInfo as any)?.segment);
   const searchParams = useSearchParams();
   const mobileView = searchParams.get('view') || 'watchlist';
 
@@ -152,6 +156,10 @@ export default function TradingPage() {
       unlockAudio();
       if (!activeAccount) {
         toast.error('No account selected');
+        return;
+      }
+      if (!mobileMarketStatus.isOpen) {
+        toast.error(mobileMarketStatus.reason || 'Market is closed');
         return;
       }
       if (!selectedSymbol?.trim()) {
@@ -224,6 +232,12 @@ export default function TradingPage() {
               
               {/* Refined Quick Trade Bottom Bar */}
               <div className="fixed bottom-[calc(3.5rem+max(0.5rem,env(safe-area-inset-bottom,0px)))] left-0 right-0 p-3 bg-bg-secondary/95 backdrop-blur-xl border-t border-border-glass z-50">
+                {!mobileMarketStatus.isOpen && (
+                  <div className="mb-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sell/10 border border-sell/20">
+                    <span className="text-[9px] font-bold text-sell uppercase tracking-wider">● CLOSED</span>
+                    <span className="text-[10px] text-sell/80 truncate">{mobileMarketStatus.reason}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between mt-1">
                    <div className="flex flex-col">
                       <span className="text-[10px] font-bold text-text-tertiary uppercase tracking-wider leading-none mb-1.5">Lot Size</span>
@@ -252,7 +266,7 @@ export default function TradingPage() {
                    <div className="flex items-center gap-2 flex-1 ml-4 h-[50px]">
                       <button
                         type="button"
-                        disabled={orderSubmitting}
+                        disabled={orderSubmitting || !mobileMarketStatus.isOpen}
                         onClick={() => placeMarketOrder('sell')}
                         className="flex-1 h-full bg-sell rounded-xl flex flex-col items-center justify-center shadow-lg shadow-sell/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none"
                       >
@@ -262,7 +276,7 @@ export default function TradingPage() {
 
                       <button
                         type="button"
-                        disabled={orderSubmitting}
+                        disabled={orderSubmitting || !mobileMarketStatus.isOpen}
                         onClick={() => placeMarketOrder('buy')}
                         className="flex-1 h-full bg-buy rounded-xl flex flex-col items-center justify-center shadow-lg shadow-buy/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none"
                       >

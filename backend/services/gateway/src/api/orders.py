@@ -24,6 +24,7 @@ from packages.common.src.auth import get_current_user
 from packages.common.src.redis_client import redis_client, PriceChannel
 from packages.common.src.kafka_client import produce_event, KafkaTopics
 from packages.common.src.notify import create_notification
+from packages.common.src.market_hours import is_market_open
 from ..engines.ib_engine import distribute_ib_commission
 
 router = APIRouter()
@@ -95,6 +96,23 @@ async def place_order(
         raise HTTPException(status_code=400, detail=f"Maximum open trades ({max_trades}) reached")
 
     instrument = await _get_instrument(req.symbol, db)
+
+    # ── Market hours enforcement ──────────────────────────────────────────
+    # Market orders are rejected when the market is closed.
+    # Pending (limit/stop) orders are always accepted so traders can pre-place
+    # orders that will fill when the market reopens.
+    if req.order_type == "market":
+        segment_name = instrument.segment.name if instrument.segment else ""
+        market_open, closed_reason = is_market_open(
+            instrument.symbol, segment_name, instrument.trading_hours
+        )
+        if not market_open:
+            raise HTTPException(
+                status_code=400,
+                detail=closed_reason or f"Market is closed for {instrument.symbol}. "
+                       "You can still place pending (limit/stop) orders.",
+            )
+    # ─────────────────────────────────────────────────────────────────────
 
     ic_row = await db.execute(
         select(InstrumentConfig).where(InstrumentConfig.instrument_id == instrument.id)

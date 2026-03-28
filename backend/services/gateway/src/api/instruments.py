@@ -9,6 +9,7 @@ from packages.common.src.database import get_db
 from packages.common.src.models import Instrument, InstrumentSegment
 from packages.common.src.schemas import InstrumentResponse, TickData
 from packages.common.src.redis_client import redis_client, PriceChannel
+from packages.common.src.market_hours import market_status_dict
 
 router = APIRouter()
 
@@ -47,6 +48,46 @@ async def list_instruments(
         )
         for inst in instruments
     ]
+
+
+@router.get("/market-status")
+async def get_market_status(db: AsyncSession = Depends(get_db)):
+    """Return market open/closed status for every active instrument.
+
+    Clients should poll this every 60 s (or on page focus) to refresh
+    the market-open state without spamming the server.
+    """
+    result = await db.execute(
+        select(Instrument).where(Instrument.is_active == True)
+    )
+    instruments = result.scalars().all()
+    return [
+        market_status_dict(
+            inst.symbol,
+            inst.segment.name if inst.segment else None,
+            inst.trading_hours,
+        )
+        for inst in instruments
+    ]
+
+
+@router.get("/market-status/{symbol}")
+async def get_symbol_market_status(symbol: str, db: AsyncSession = Depends(get_db)):
+    """Return market status for a single symbol."""
+    result = await db.execute(
+        select(Instrument).where(
+            Instrument.symbol == symbol.upper(),
+            Instrument.is_active == True,
+        )
+    )
+    inst = result.scalar_one_or_none()
+    if not inst:
+        raise HTTPException(status_code=404, detail=f"Instrument {symbol} not found")
+    return market_status_dict(
+        inst.symbol,
+        inst.segment.name if inst.segment else None,
+        inst.trading_hours,
+    )
 
 
 @router.get("/prices/all")
