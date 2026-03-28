@@ -1,11 +1,22 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTradingStore } from '@/stores/tradingStore';
+import { useTradingStore, InstrumentInfo } from '@/stores/tradingStore';
 import { clsx } from 'clsx';
+import MobileOrderSheet from '@/components/trading/MobileOrderSheet';
 
 const SEGMENTS = ['All', 'Forex', 'Commodities', 'Indices', 'Crypto'];
+
+/** MT5 mobile palette */
+const MT5 = {
+  bg: '#000000',
+  muted: '#808080',
+  up: '#50A5F1',
+  down: '#EC5B5B',
+  tabActive: '#50A5F1',
+  corner: '#EC5B5B',
+} as const;
 
 const SYMBOL_META: Record<string, { display: string; segment: string }> = {
   EURUSD: { display: 'EUR/USD', segment: 'Forex' },
@@ -70,10 +81,10 @@ import MobileOrderSheet from '@/components/trading/MobileOrderSheet';
 
 export default function Watchlist() {
   const router = useRouter();
-  const { watchlist, prices, prevPrices, selectedSymbol, setSelectedSymbol } = useTradingStore();
+  const { watchlist, prices, prevPrices, selectedSymbol, setSelectedSymbol, instruments } = useTradingStore();
   const [search, setSearch] = useState('');
   const [segment, setSegment] = useState('All');
-  const [flashMap, setFlashMap] = useState<Record<string, 'up' | 'down'>>({});
+  const [flashMap, setFlashMap] = useState<Record<string, Trend>>({});
   const [activeOrderSymbol, setActiveOrderSymbol] = useState<string | null>(null);
 
   const sessionOpenRef = useRef<Record<string, number>>({});
@@ -100,7 +111,7 @@ export default function Watchlist() {
   }, [prices, watchlist]);
 
   useEffect(() => {
-    const newFlash: Record<string, 'up' | 'down'> = {};
+    const newFlash: Record<string, Trend> = {};
     for (const symbol of watchlist) {
       const tick = prices[symbol];
       const prev = prevPrices[symbol];
@@ -117,7 +128,7 @@ export default function Watchlist() {
           for (const k of Object.keys(newFlash)) delete next[k];
           return next;
         });
-      }, 150);
+      }, 180);
       return () => clearTimeout(t);
     }
   }, [prices, prevPrices, watchlist]);
@@ -134,13 +145,30 @@ export default function Watchlist() {
     router.push(`/trading?view=chart`);
   };
 
+  const displayFor = useCallback(
+    (symbol: string) =>
+      instruments.find((i: InstrumentInfo) => i.symbol === symbol)?.display_name ||
+      SYMBOL_META[symbol]?.display ||
+      symbol,
+    [instruments],
+  );
+
   return (
-    <div className="h-full flex flex-col bg-bg-primary border-r border-border-glass">
-      {/* Search Bar */}
-      <div className="p-3">
-        <div className="relative group">
-          <div className="absolute inset-0 bg-buy/5 blur-xl group-focus-within:bg-buy/10 transition-colors pointer-events-none" />
-          <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+    <div
+      className="h-full min-h-0 flex flex-col border-r border-white/[0.08]"
+      style={{ backgroundColor: MT5.bg }}
+    >
+      {/* Search */}
+      <div className="p-3 shrink-0">
+        <div className="relative">
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40"
+            style={{ color: MT5.muted }}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth="2.5"
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
@@ -148,16 +176,17 @@ export default function Watchlist() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search instruments..."
-            className="w-full !px-10 !py-3 !text-sm !bg-bg-secondary/50 !border-border-glass !rounded-xl focus:!border-buy/50 focus:!ring-1 focus:!ring-buy/20 placeholder:text-text-tertiary/60 transition-all font-medium"
+            className="w-full pl-10 pr-3 py-2.5 text-sm rounded-xl border border-white/10 bg-white/[0.06] text-white placeholder:text-white/35 outline-none focus:border-[#50A5F1]/50 focus:ring-1 focus:ring-[#50A5F1]/20"
           />
         </div>
       </div>
 
-      {/* Category Tabs */}
-      <div className="flex gap-2 px-3 pb-3 border-b border-border-glass overflow-x-auto scrollbar-hide no-scrollbar">
+      {/* Category tabs */}
+      <div className="flex gap-2 px-3 pb-3 border-b border-white/[0.08] overflow-x-auto scrollbar-hide no-scrollbar shrink-0">
         {['All', 'Starred', ...SEGMENTS.slice(1)].map((seg) => (
           <button
             key={seg}
+            type="button"
             onClick={() => setSegment(seg)}
             className={clsx(
               'px-4 py-1.5 text-xs font-bold rounded-full transition-all duration-200 whitespace-nowrap border',
@@ -165,18 +194,36 @@ export default function Watchlist() {
                 ? 'bg-buy text-white border-buy shadow-lg shadow-buy/20'
                 : 'bg-bg-secondary text-text-tertiary border-border-glass hover:text-text-secondary hover:border-text-tertiary/30',
             )}
+            style={
+              segment === seg
+                ? { backgroundColor: MT5.tabActive, boxShadow: '0 4px 14px rgba(80,165,241,0.25)' }
+                : undefined
+            }
           >
             {seg}
           </button>
         ))}
       </div>
 
-      {/* Instruments List */}
-      <div className="flex-1 overflow-y-auto divide-y divide-border-glass/30">
+      {/* Instruments — MT5 row layout (scrolls full height inside sidebar) */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain touch-pan-y">
         {filtered.map((symbol) => {
           const tick = prices[symbol];
           const digits = getDigits(symbol);
           const flash = flashMap[symbol];
+          const trend: Trend = flash ?? 'neutral';
+          const sess = sessionStats[symbol];
+          const open = sess?.open;
+          const pts = tick && open != null ? pointsDelta(tick.bid, open, digits) : null;
+          const pctNum =
+            tick && open != null && open !== 0 ? ((tick.bid - open) / open) * 100 : null;
+          const ptsStr = pts != null ? `${pts > 0 ? '+' : ''}${pts}` : '—';
+          const pctStr =
+            pctNum != null ? `${pctNum >= 0 ? '+' : ''}${pctNum.toFixed(2)}%` : '—%';
+          const changePositive = pts != null && pts > 0;
+          const changeNegative = pts != null && pts < 0;
+          const spreadPips = tick && pip > 0 ? Math.max(0, Math.round(tick.spread / pip)) : 0;
+          const isSelected = selectedSymbol === symbol;
 
           const sessionOpen = sessionOpenRef.current[symbol];
           const dayLow = dayLowRef.current[symbol];

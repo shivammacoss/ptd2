@@ -149,7 +149,35 @@ async def place_order(
         contract_size = instrument.contract_size or Decimal("100000")
         required_margin = _calc_margin(req.lots, fill_price, contract_size, account.leverage)
 
-        if required_margin > (account.free_margin or Decimal("0")):
+        # ── Dynamically recalculate free_margin with unrealized PnL ──
+        # The stored free_margin can be stale; compute real-time equity
+        unrealized_pnl = Decimal("0")
+        open_pos_result = await db.execute(
+            select(Position).where(
+                Position.account_id == account.id,
+                Position.status == "open",
+            )
+        )
+        for pos in open_pos_result.scalars().all():
+            try:
+                p_bid, p_ask = await _get_current_price(pos.instrument.symbol)
+                pos_side = pos.side.value if hasattr(pos.side, 'value') else str(pos.side)
+                cp = p_bid if pos_side == "buy" else p_ask
+                cs = pos.instrument.contract_size if pos.instrument else Decimal("100000")
+                if pos_side == "buy":
+                    unrealized_pnl += (cp - pos.open_price) * pos.lots * cs
+                else:
+                    unrealized_pnl += (pos.open_price - cp) * pos.lots * cs
+            except Exception:
+                pass
+        real_equity = (account.balance or Decimal("0")) + (account.credit or Decimal("0")) + unrealized_pnl
+        real_free_margin = real_equity - (account.margin_used or Decimal("0"))
+
+        # Update stored values to stay in sync
+        account.equity = real_equity
+        account.free_margin = real_free_margin
+
+        if required_margin > real_free_margin:
             raise HTTPException(status_code=400, detail="Insufficient margin")
 
         order.status = "filled"
@@ -173,7 +201,7 @@ async def place_order(
 
         account.margin_used = (account.margin_used or Decimal("0")) + required_margin
         account.balance -= commission
-        account.equity = account.balance + (account.credit or Decimal("0"))
+        account.equity = (account.balance or Decimal("0")) + (account.credit or Decimal("0")) + unrealized_pnl
         account.free_margin = account.equity - account.margin_used
 
     else:

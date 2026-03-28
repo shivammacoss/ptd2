@@ -93,11 +93,12 @@ interface TradingState {
     account_id: string;
     symbol: string;
     side: 'buy' | 'sell';
-    order_type: 'market' | 'pending';
+    order_type: 'market' | 'limit' | 'stop' | 'stop_limit';
     lots: number;
     price?: number;
     stop_loss?: number;
     take_profit?: number;
+    stop_limit_price?: number;
   }) => Promise<any>;
 }
 
@@ -168,6 +169,7 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
             margin_used: Number(updated.margin_used) || 0,
             free_margin: Number(updated.free_margin) || 0,
             credit: Number(updated.credit) || 0,
+            margin_level: Number(updated.margin_level) || 0,
           },
         });
       }
@@ -213,6 +215,7 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
         price: data.price,
         stop_loss: data.stop_loss,
         take_profit: data.take_profit,
+        stop_limit_price: data.stop_limit_price,
       });
 
       // Refresh data after successful order

@@ -114,6 +114,16 @@ export default function TopBar() {
 
         {/* Right cluster */}
         <div className="hidden md:flex items-center justify-end gap-1 sm:gap-1.5 md:gap-2 lg:gap-3 shrink-0 z-20 [&_button]:shrink-0">
+          {process.env.NEXT_PUBLIC_APP_VERSION &&
+            process.env.NEXT_PUBLIC_APP_VERSION !== 'docker' &&
+            process.env.NEXT_PUBLIC_APP_VERSION !== 'local' && (
+              <span
+                className="hidden xl:inline text-[10px] font-mono text-text-tertiary/70 tabular-nums max-w-[5.5rem] truncate"
+                title={`UI build ${process.env.NEXT_PUBLIC_APP_VERSION}`}
+              >
+                {process.env.NEXT_PUBLIC_APP_VERSION}
+              </span>
+            )}
           <ThemeToggle compact />
           <div className={`hidden sm:block w-2 h-2 rounded-full shrink-0 self-center ${statusColor}`} title={wsStatus} />
           <NotificationBell />

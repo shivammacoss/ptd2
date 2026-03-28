@@ -182,13 +182,16 @@ services:
       - ./backend/services/risk-engine:/app/services/risk_engine
       - ./backend/packages:/app/packages
 
-  # Trader frontend (port 3000) — PRODUCTION IMAGE: UI edits need a rebuild to show in the browser:
-  #   docker compose build trader-frontend && docker compose up -d trader-frontend
-  # For live reload while coding, run the app on the host instead: cd frontend/trader && npm run dev
+  # Trader frontend (port 3000) — RESTART ALONE IS NOT ENOUGH. Rebuild the image or the browser keeps old JS:
+  #   PowerShell:  $env:APP_VERSION=(Get-Date -Format 'yyyyMMdd-HHmmss'); docker compose build --no-cache trader-frontend; docker compose up -d trader-frontend
+  #   Bash:        APP_VERSION=$(date +%Y%m%d-%H%M%S) docker compose build --no-cache trader-frontend && docker compose up -d trader-frontend
+  # After deploy: hard-refresh (Ctrl+Shift+R). Top bar shows APP_VERSION when set (xl screens).
   trader-frontend:
     build:
       context: ./frontend/trader
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_APP_VERSION: ${APP_VERSION:-docker}
     ports:
       - "3000:3000"
     environment:
