@@ -1,21 +1,17 @@
 const DEFAULT_SERVER_API = 'http://127.0.0.1:8000/api/v1';
 
-/** Base URL for REST calls. Browser defaults to same-origin `/api/v1` (Next rewrite → gateway). */
+/** Base URL for REST calls. Browser always uses same-origin `/api/v1` (proxied server-side). */
 export function getApiBase(): string {
-  const env = process.env.NEXT_PUBLIC_API_URL?.trim();
-  if (typeof window !== 'undefined') {
-    if (env) {
-      const e = env.replace(/\/$/, '');
-      // Never use http:// API from an https:// page (browser blocks mixed content).
-      if (window.location.protocol === 'https:' && /^http:\/\//i.test(e)) {
-        return '/api/v1';
-      }
-      return e;
-    }
-    return '/api/v1';
-  }
-  if (env) return env.replace(/\/$/, '');
-  return process.env.INTERNAL_API_URL?.trim()?.replace(/\/$/, '') || DEFAULT_SERVER_API;
+  // In the browser: always use a relative path so requests go through the Next.js server-side
+  // proxy (src/app/api/v1/[...path]/route.ts → gateway). Never expose the Docker-internal
+  // gateway hostname to the browser — that would cause mixed-content blocks on HTTPS.
+  if (typeof window !== 'undefined') return '/api/v1';
+  // Server-side only (route handler, SSR): prefer INTERNAL_API_URL set by Docker Compose.
+  return (
+    process.env.INTERNAL_API_URL?.trim()?.replace(/\/$/, '') ||
+    process.env.NEXT_PUBLIC_API_URL?.trim()?.replace(/\/$/, '') ||
+    DEFAULT_SERVER_API
+  );
 }
 
 /** Default client timeout (avoid endless spinners if API is down). */

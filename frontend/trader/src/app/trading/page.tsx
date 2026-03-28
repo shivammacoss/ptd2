@@ -90,7 +90,6 @@ export default function TradingPage() {
     setWatchlistWidth, setOrderPanelWidth, setBottomPanelHeight
   } = useUIStore();
 
-  const [wlW, setWlW] = useState(() => Math.max(WATCHLIST_MIN, watchlistWidth));
   const [opW, setOpW] = useState(orderPanelWidth);
   const [bpH, setBpH] = useState(bottomPanelHeight);
   const [isMobile, setIsMobile] = useState(false);
@@ -281,21 +280,11 @@ export default function TradingPage() {
   }
 
   return (
-    <div className="flex-1 flex overflow-hidden min-h-0">
-      {/* LEFT — Watchlist (draggable right edge) */}
-      <div
-        className="shrink-0 flex flex-col h-full min-h-0 overflow-hidden"
-        style={{ width: Math.max(WATCHLIST_MIN, wlW) }}
-      >
+    <div className="flex-1 flex overflow-hidden">
+      {/* LEFT — Watchlist fixed width */}
+      <div className="w-[280px] shrink-0 overflow-hidden">
         <Watchlist />
       </div>
-
-      {/* Left drag handle */}
-      <DragHandleV onDrag={(dx) => {
-        const next = Math.max(WATCHLIST_MIN, Math.min(WATCHLIST_MAX, wlW + dx));
-        setWlW(next);
-        setWatchlistWidth(next);
-      }} />
 
       {/* CENTER — Chart + Bottom Panel */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">

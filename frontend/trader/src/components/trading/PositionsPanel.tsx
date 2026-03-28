@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTradingStore } from '@/stores/tradingStore';
 import { clsx } from 'clsx';
 import api from '@/lib/api/client';
 import toast from 'react-hot-toast';
 import { sounds, unlockAudio } from '@/lib/sounds';
-import { RefreshCw, Download } from 'lucide-react';
+import { RefreshCw, Download, Pencil, Check, X, ChevronDown, TrendingUp, TrendingDown, Layers } from 'lucide-react';
 
 interface ClosedTrade {
   id: string;
@@ -23,6 +23,8 @@ interface ClosedTrade {
 }
 
 type CloseModal = { id: string; symbol: string; side: string; lots: number; closeLots: string } | null;
+type SltpEdit = { positionId: string; sl: string; tp: string } | null;
+type BulkCloseType = 'all' | 'profit' | 'loss';
 
 type TabId = 'open' | 'pending' | 'history';
 
@@ -58,8 +60,28 @@ export default function PositionsPanel() {
   const [closeModal, setCloseModal] = useState<CloseModal>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toolbarBusy, setToolbarBusy] = useState(false);
+  const [sltpEdit, setSltpEdit] = useState<SltpEdit>(null);
+  const [sltpSaving, setSltpSaving] = useState(false);
+  const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
+  const [bulkConfirm, setBulkConfirm] = useState<BulkCloseType | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const bulkMenuRef = useRef<HTMLDivElement>(null);
 
   const totalPnl = positions.reduce((s, p) => s + (p.profit || 0), 0);
+
+  const profitPositions = positions.filter((p) => (p.profit || 0) > 0);
+  const lossPositions = positions.filter((p) => (p.profit || 0) < 0);
+
+  useEffect(() => {
+    if (!bulkMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (bulkMenuRef.current && !bulkMenuRef.current.contains(e.target as Node)) {
+        setBulkMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [bulkMenuOpen]);
 
   const getDigits = (symbol: string) => {
     const inst = instruments.find((i) => i.symbol === symbol);
@@ -119,6 +141,69 @@ export default function PositionsPanel() {
       toast.error(e instanceof Error ? e.message : 'Close failed');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const executeBulkClose = async (type: BulkCloseType) => {
+    setBulkConfirm(null);
+    setBulkBusy(true);
+    const targets =
+      type === 'all' ? positions : type === 'profit' ? profitPositions : lossPositions;
+    if (targets.length === 0) {
+      toast(
+        type === 'profit'
+          ? 'No profitable positions to close'
+          : type === 'loss'
+            ? 'No losing positions to close'
+            : 'No open positions',
+        { icon: 'ℹ️' },
+      );
+      setBulkBusy(false);
+      return;
+    }
+    let closed = 0;
+    let failed = 0;
+    for (const pos of targets) {
+      try {
+        const res = await api.post<{ profit?: number; close_price?: number }>(
+          `/positions/${pos.id}/close`,
+          {},
+        );
+        const pnl = res.profit ?? 0;
+        pnl >= 0 ? sounds.profit() : sounds.loss();
+        removePosition(pos.id);
+        closed++;
+      } catch {
+        failed++;
+      }
+    }
+    if (closed > 0)
+      toast.success(`${closed} position${closed > 1 ? 's' : ''} closed successfully`);
+    if (failed > 0)
+      toast.error(`${failed} position${failed > 1 ? 's' : ''} failed to close`);
+    refreshPositions();
+    refreshAccount();
+    void loadHistory();
+    setBulkBusy(false);
+  };
+
+  const saveSltpEdit = async () => {
+    if (!sltpEdit) return;
+    setSltpSaving(true);
+    try {
+      const body: Record<string, unknown> = {};
+      const slVal = sltpEdit.sl.trim();
+      const tpVal = sltpEdit.tp.trim();
+      if (slVal !== '' && slVal !== '—') body.stop_loss = parseFloat(slVal);
+      if (tpVal !== '' && tpVal !== '—') body.take_profit = parseFloat(tpVal);
+      await api.put(`/positions/${sltpEdit.positionId}`, body);
+      toast.success('SL/TP updated');
+      setSltpEdit(null);
+      refreshPositions();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to update SL/TP');
+    } finally {
+      setSltpSaving(false);
     }
   };
 
@@ -229,7 +314,7 @@ export default function PositionsPanel() {
         {
           label: 'Floating PL',
           value: totalPnl,
-          color: totalPnl >= 0 ? 'text-success' : 'text-sell',
+          color: totalPnl >= 0 ? 'text-buy' : 'text-sell',
           signed: true as const,
         },
       ]
@@ -283,15 +368,17 @@ export default function PositionsPanel() {
           </div>
 
           <div className="flex items-center justify-between gap-2 px-2 py-1.5 border-b border-border-glass/60 bg-bg-primary/20 shrink-0">
-            <button
-              type="button"
-              onClick={() => void handleRefresh()}
-              disabled={toolbarBusy || (activeTab === 'history' && historyLoading)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-semibold text-text-secondary bg-bg-secondary/80 border border-border-glass hover:bg-bg-hover hover:text-text-primary disabled:opacity-50"
-            >
-              <RefreshCw className={clsx('w-3.5 h-3.5', toolbarBusy && 'animate-spin')} />
-              Refresh
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => void handleRefresh()}
+                disabled={toolbarBusy || (activeTab === 'history' && historyLoading)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-semibold text-text-secondary bg-bg-secondary/80 border border-border-glass hover:bg-bg-hover hover:text-text-primary disabled:opacity-50"
+              >
+                <RefreshCw className={clsx('w-3.5 h-3.5', toolbarBusy && 'animate-spin')} />
+                Refresh
+              </button>
+            </div>
             <button
               type="button"
               onClick={exportCurrentCsv}
@@ -346,13 +433,71 @@ export default function PositionsPanel() {
                             <td className={clsx(td, 'font-mono')}>
                               {pos.current_price != null ? pos.current_price.toFixed(d) : '—'}
                             </td>
-                            <td className={clsx(td, 'font-mono font-bold', pnl >= 0 ? 'text-success' : 'text-sell')}>
+                            <td className={clsx(td, 'font-mono font-bold')} style={{ color: pnl >= 0 ? '#2962FF' : '#FF2440' }}>
                               {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
                             </td>
-                            <td className={clsx(td, 'text-[10px] text-text-tertiary')}>
-                              SL: {pos.stop_loss != null ? pos.stop_loss.toFixed(d) : '—'}
-                              <br />
-                              TP: {pos.take_profit != null ? pos.take_profit.toFixed(d) : '—'}
+                            <td className={clsx(td, 'text-[10px]')}>
+                              {sltpEdit && sltpEdit.positionId === pos.id ? (
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-text-tertiary w-5">SL:</span>
+                                    <input
+                                      type="number"
+                                      step="0.00001"
+                                      value={sltpEdit.sl}
+                                      onChange={(e) => setSltpEdit({ ...sltpEdit, sl: e.target.value })}
+                                      className="w-20 px-1 py-0.5 text-[10px] font-mono bg-bg-input border border-border-glass rounded text-text-primary"
+                                      placeholder="—"
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-text-tertiary w-5">TP:</span>
+                                    <input
+                                      type="number"
+                                      step="0.00001"
+                                      value={sltpEdit.tp}
+                                      onChange={(e) => setSltpEdit({ ...sltpEdit, tp: e.target.value })}
+                                      className="w-20 px-1 py-0.5 text-[10px] font-mono bg-bg-input border border-border-glass rounded text-text-primary"
+                                      placeholder="—"
+                                    />
+                                  </div>
+                                  <div className="flex gap-1 mt-0.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => void saveSltpEdit()}
+                                      disabled={sltpSaving}
+                                      className="p-0.5 rounded bg-buy/15 text-buy hover:bg-buy/25 disabled:opacity-50"
+                                      title="Save"
+                                    >
+                                      <Check className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSltpEdit(null)}
+                                      className="p-0.5 rounded bg-sell/15 text-sell hover:bg-sell/25"
+                                      title="Cancel"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setSltpEdit({
+                                    positionId: pos.id,
+                                    sl: pos.stop_loss != null ? pos.stop_loss.toFixed(d) : '',
+                                    tp: pos.take_profit != null ? pos.take_profit.toFixed(d) : '',
+                                  })}
+                                  className="text-left group cursor-pointer"
+                                  title="Click to edit SL/TP"
+                                >
+                                  <span className="text-text-tertiary">SL: {pos.stop_loss != null ? pos.stop_loss.toFixed(d) : '—'}</span>
+                                  <br />
+                                  <span className="text-text-tertiary">TP: {pos.take_profit != null ? pos.take_profit.toFixed(d) : '—'}</span>
+                                  <Pencil className="w-2.5 h-2.5 inline ml-1 opacity-0 group-hover:opacity-60 text-text-tertiary transition-opacity" />
+                                </button>
+                              )}
                             </td>
                             <td className={clsx(td, 'text-right pr-2')}>
                               <button
@@ -508,7 +653,7 @@ export default function PositionsPanel() {
                             <td className={td}>{trade.lots}</td>
                             <td className={clsx(td, 'font-mono')}>{trade.open_price.toFixed(d)}</td>
                             <td className={clsx(td, 'font-mono')}>{trade.close_price.toFixed(d)}</td>
-                            <td className={clsx(td, 'font-mono font-bold', pnl >= 0 ? 'text-success' : 'text-sell')}>
+                            <td className={clsx(td, 'font-mono font-bold')} style={{ color: pnl >= 0 ? '#2962FF' : '#FF2440' }}>
                               {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
                             </td>
                             <td className={clsx(td, 'text-[10px] text-text-tertiary')}>
@@ -532,6 +677,77 @@ export default function PositionsPanel() {
           </div>
         </div>
       </div>
+
+      {bulkConfirm && (() => {
+        const countMap = { all: positions.length, profit: profitPositions.length, loss: lossPositions.length };
+        const labelMap = {
+          all: 'Close All Positions',
+          profit: 'Close Profitable Positions',
+          loss: 'Close Losing Positions',
+        };
+        const descMap = {
+          all: `Close all ${positions.length} open position${positions.length !== 1 ? 's' : ''} at market price.`,
+          profit: `Close ${profitPositions.length} profitable position${profitPositions.length !== 1 ? 's' : ''} at market price.`,
+          loss: `Close ${lossPositions.length} losing position${lossPositions.length !== 1 ? 's' : ''} at market price.`,
+        };
+        const count = countMap[bulkConfirm];
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in px-4">
+            <div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setBulkConfirm(null)}
+            />
+            <div className="relative bg-bg-secondary border border-border-glass rounded-2xl shadow-2xl w-full max-w-sm p-6 overflow-hidden">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-bold text-text-primary">{labelMap[bulkConfirm]}</h3>
+                <button
+                  type="button"
+                  onClick={() => setBulkConfirm(null)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-bg-hover text-text-tertiary hover:text-text-primary transition-colors"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p className="text-sm text-text-secondary mb-2">{descMap[bulkConfirm]}</p>
+              {count === 0 ? (
+                <>
+                  <p className="text-xs text-text-tertiary mb-4">No matching positions found.</p>
+                  <button
+                    type="button"
+                    onClick={() => setBulkConfirm(null)}
+                    className="w-full py-3 bg-bg-hover text-text-primary font-bold rounded-xl"
+                  >
+                    OK
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-text-tertiary mb-6">This action cannot be undone.</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBulkConfirm(null)}
+                      className="flex-1 py-3 bg-bg-hover text-text-primary font-bold rounded-xl active:scale-95 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void executeBulkClose(bulkConfirm)}
+                      disabled={bulkBusy}
+                      className="flex-1 py-3 bg-sell text-white font-bold rounded-xl shadow-lg shadow-sell/20 active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      {bulkBusy ? 'Closing…' : 'Confirm'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {closeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in px-4">
@@ -605,6 +821,45 @@ export default function PositionsPanel() {
                   className="flex-1 py-3 bg-sell text-white font-bold rounded-xl shadow-lg shadow-sell/20 active:scale-95 transition-all disabled:opacity-50"
                 >
                   {submitting ? 'Closing...' : 'Close'}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <div className="flex-1 h-px bg-border-glass/50" />
+                <span className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">Bulk Close</span>
+                <div className="flex-1 h-px bg-border-glass/50" />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setCloseModal(null); setBulkConfirm('all'); }}
+                  disabled={bulkBusy || positions.length === 0}
+                  className="flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl bg-bg-primary/60 border border-border-glass hover:bg-bg-hover active:scale-95 transition-all disabled:opacity-40"
+                >
+                  <Layers className="w-4 h-4 text-text-secondary" />
+                  <span className="text-[10px] font-bold text-text-primary">Close All</span>
+                  <span className="text-[10px] text-text-tertiary tabular-nums">({positions.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setCloseModal(null); setBulkConfirm('profit'); }}
+                  disabled={bulkBusy || profitPositions.length === 0}
+                  className="flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl bg-buy/5 border border-buy/20 hover:bg-buy/10 active:scale-95 transition-all disabled:opacity-40"
+                >
+                  <TrendingUp className="w-4 h-4" style={{ color: '#2962FF' }} />
+                  <span className="text-[10px] font-bold" style={{ color: '#2962FF' }}>Profit</span>
+                  <span className="text-[10px] text-text-tertiary tabular-nums">({profitPositions.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setCloseModal(null); setBulkConfirm('loss'); }}
+                  disabled={bulkBusy || lossPositions.length === 0}
+                  className="flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl bg-sell/5 border border-sell/20 hover:bg-sell/10 active:scale-95 transition-all disabled:opacity-40"
+                >
+                  <TrendingDown className="w-4 h-4" style={{ color: '#FF2440' }} />
+                  <span className="text-[10px] font-bold" style={{ color: '#FF2440' }}>Loss</span>
+                  <span className="text-[10px] text-text-tertiary tabular-nums">({lossPositions.length})</span>
                 </button>
               </div>
             </div>

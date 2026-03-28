@@ -22,20 +22,9 @@ export function unlockAudio(): void {
 }
 
 function getAudioContext(): AudioContext | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const AC = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AC) return null;
-    if (!sharedCtx || sharedCtx.state === 'closed') {
-      sharedCtx = new AC();
-    }
-    if (sharedCtx.state === 'suspended') {
-      void sharedCtx.resume();
-    }
-    return sharedCtx;
-  } catch {
-    return null;
-  }
+  if (!sharedCtx || sharedCtx.state === 'closed') return null;
+  if (sharedCtx.state === 'suspended') void sharedCtx.resume();
+  return sharedCtx;
 }
 
 function playTone(freq: number, duration: number, type: OscillatorType = 'sine', volume = 0.15) {

@@ -86,8 +86,9 @@ export default function MobileBottomNav() {
   const { theme, toggleTheme } = useUIStore();
   const [showMore, setShowMore] = useState(false);
 
-  // Hide on auth pages (login, register, impersonate)
-  if (pathname?.startsWith('/auth')) return null;
+  // Hide on auth and public landing/legal pages
+  const isPublicPage = pathname === '/' || pathname === '/privacy' || pathname === '/terms' || pathname === '/risk';
+  if (pathname?.startsWith('/auth') || isPublicPage) return null;
 
   const handleLogout = () => {
     toast.success('Logged out successfully!');

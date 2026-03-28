@@ -9,7 +9,8 @@ from packages.common.src.config import get_settings
 from packages.common.src.redis_client import redis_client, publish_price, PriceChannel
 from packages.common.src.kafka_client import produce_event, KafkaTopics, close_producer
 
-from .feed_handler import FeedSimulator
+from .feed_handler import FeedSimulator, INSTRUMENTS
+from .infoway_feed import InfowayFeed
 from .bar_aggregator import BarAggregator
 from .store import TickStore
 
@@ -21,7 +22,14 @@ settings = get_settings()
 
 class MarketDataService:
     def __init__(self):
-        self.feed = FeedSimulator(tick_rate_multiplier=1.0)
+        if settings.INFOWAY_API_KEY and settings.INFOWAY_API_KEY.strip():
+            self.feed = InfowayFeed(settings.INFOWAY_API_KEY, INSTRUMENTS)
+            logger.info("Price feed: Infoway WebSocket (depth)")
+        else:
+            self.feed = FeedSimulator(tick_rate_multiplier=1.0)
+            logger.warning(
+                "INFOWAY_API_KEY not set — using simulated forex/indices + Binance crypto"
+            )
         self.aggregator = BarAggregator()
         self.store = TickStore()
         self.running = True

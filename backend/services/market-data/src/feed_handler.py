@@ -1,7 +1,6 @@
-"""Feed Handler — Live crypto from Binance + simulated forex/commodities/indices.
+"""Feed Handler — Infoway (see `infoway_feed`) when `INFOWAY_API_KEY` is set.
 
-Crypto pairs (BTCUSD, ETHUSD) use Binance WebSocket for real-time prices.
-All other instruments use geometric Brownian motion simulation.
+Fallback (no API key): Binance for crypto + GBM simulator for other symbols.
 """
 
 import asyncio
@@ -23,6 +22,9 @@ BINANCE_WS = "wss://stream.binance.com:9443/ws"
 BINANCE_MAP = {
     "btcusdt": "BTCUSD",
     "ethusdt": "ETHUSD",
+    "ltcusdt": "LTCUSD",
+    "xrpusdt": "XRPUSD",
+    "solusdt": "SOLUSD",
 }
 LIVE_CRYPTO_SYMBOLS = set(BINANCE_MAP.values())
 
@@ -43,8 +45,19 @@ INSTRUMENTS: Dict[str, dict] = {
     "US30":    {"base_price": 39250.0,  "category": "index",       "pip": 0.1,     "decimals": 1},
     "US500":   {"base_price": 5180.0,   "category": "index",       "pip": 0.01,    "decimals": 2},
     "NAS100":  {"base_price": 18250.0,  "category": "index",       "pip": 0.1,     "decimals": 1},
+    "UK100":   {"base_price": 8150.0,   "category": "index",       "pip": 0.1,     "decimals": 1},
+    "GER40":   {"base_price": 17850.0,  "category": "index",       "pip": 0.1,     "decimals": 1},
     "BTCUSD":  {"base_price": 67500.0,  "category": "crypto",      "pip": 0.01,    "decimals": 2},
     "ETHUSD":  {"base_price": 3450.0,   "category": "crypto",      "pip": 0.01,    "decimals": 2},
+    "LTCUSD":  {"base_price": 95.0,     "category": "crypto",      "pip": 0.01,    "decimals": 2},
+    "XRPUSD":  {"base_price": 0.52,     "category": "crypto",      "pip": 0.0001,  "decimals": 4},
+    "SOLUSD":  {"base_price": 145.0,    "category": "crypto",      "pip": 0.01,    "decimals": 2},
+    "EURCHF":  {"base_price": 0.9340,   "category": "forex_minor", "pip": 0.0001,  "decimals": 5},
+    "GBPCHF":  {"base_price": 1.1180,   "category": "forex_minor", "pip": 0.0001,  "decimals": 5},
+    "AUDJPY":  {"base_price": 98.50,    "category": "forex_minor", "pip": 0.01,    "decimals": 3},
+    "CADJPY":  {"base_price": 110.20,   "category": "forex_minor", "pip": 0.01,    "decimals": 3},
+    "NZDJPY":  {"base_price": 91.40,    "category": "forex_minor", "pip": 0.01,    "decimals": 3},
+    "USDHKD":  {"base_price": 7.7850,   "category": "forex_minor", "pip": 0.0001,  "decimals": 5},
 }
 
 ANNUAL_VOLATILITY = {
@@ -72,8 +85,19 @@ SPREAD_RANGE: Dict[str, tuple] = {
     "US30":    (1.0,     3.0),
     "US500":   (0.5,     1.5),
     "NAS100":  (1.0,     3.0),
+    "UK100":   (0.5,     2.0),
+    "GER40":   (0.5,     2.0),
     "BTCUSD":  (10.0,    50.0),
     "ETHUSD":  (1.0,     5.0),
+    "LTCUSD":  (0.05,    0.15),
+    "XRPUSD":  (0.0002,  0.0008),
+    "SOLUSD":  (0.05,    0.20),
+    "EURCHF":  (0.00010, 0.00030),
+    "GBPCHF":  (0.00015, 0.00040),
+    "AUDJPY":  (0.010,   0.030),
+    "CADJPY":  (0.010,   0.030),
+    "NZDJPY":  (0.012,   0.035),
+    "USDHKD":  (0.0002,  0.0006),
 }
 
 TICK_FREQ: Dict[str, tuple] = {
@@ -105,7 +129,10 @@ CORRELATIONS: List[tuple] = [
     ("XAUUSD", "EURUSD",  0.30),
     ("US500",  "NAS100",  0.90),
     ("US500",  "US30",    0.85),
+    ("UK100",  "GER40",   0.65),
     ("BTCUSD", "ETHUSD",  0.75),
+    ("BTCUSD", "LTCUSD",  0.70),
+    ("ETHUSD", "SOLUSD",  0.72),
 ]
 
 TRADING_SECONDS_PER_YEAR = 252 * 24 * 3600

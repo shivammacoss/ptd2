@@ -40,8 +40,8 @@ const WATCHLIST_DEFAULT_PX = WATCHLIST_LAYOUT.default;
 export const useUIStore = create<UIState>()(
   persist(
     (set, get) => ({
-      theme: 'dark' as Theme,
-      watchlistWidth: WATCHLIST_DEFAULT_PX,
+      theme: 'light' as Theme,
+      watchlistWidth: 220,
       orderPanelWidth: 240,
       bottomPanelHeight: 220,
       activeBottomTab: 'positions',

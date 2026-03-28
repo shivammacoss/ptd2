@@ -246,6 +246,16 @@ class RiskEngine:
                             swap_config = swap_result.scalar_one_or_none()
 
                             if not swap_config:
+                                inst = pos.instrument
+                                if inst and inst.segment_id:
+                                    swap_query = select(SwapConfig).where(
+                                        SwapConfig.scope == "segment",
+                                        SwapConfig.segment_id == inst.segment_id,
+                                        SwapConfig.is_enabled == True,
+                                    )
+                                    swap_result = await db.execute(swap_query)
+                                    swap_config = swap_result.scalar_one_or_none()
+                            if not swap_config:
                                 swap_query = select(SwapConfig).where(
                                     SwapConfig.scope == "default",
                                     SwapConfig.is_enabled == True,

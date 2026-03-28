@@ -24,109 +24,60 @@ const SYMBOL_META: Record<string, { display: string; segment: string }> = {
   USDJPY: { display: 'USD/JPY', segment: 'Forex' },
   AUDUSD: { display: 'AUD/USD', segment: 'Forex' },
   USDCAD: { display: 'USD/CAD', segment: 'Forex' },
+  USDCHF: { display: 'USD/CHF', segment: 'Forex' },
   NZDUSD: { display: 'NZD/USD', segment: 'Forex' },
   EURGBP: { display: 'EUR/GBP', segment: 'Forex' },
   EURJPY: { display: 'EUR/JPY', segment: 'Forex' },
+  GBPJPY: { display: 'GBP/JPY', segment: 'Forex' },
+  EURCHF: { display: 'EUR/CHF', segment: 'Forex' },
+  GBPCHF: { display: 'GBP/CHF', segment: 'Forex' },
+  AUDJPY: { display: 'AUD/JPY', segment: 'Forex' },
+  AUDNZD: { display: 'AUD/NZD', segment: 'Forex' },
+  AUDCAD: { display: 'AUD/CAD', segment: 'Forex' },
+  AUDCHF: { display: 'AUD/CHF', segment: 'Forex' },
+  CADJPY: { display: 'CAD/JPY', segment: 'Forex' },
+  NZDJPY: { display: 'NZD/JPY', segment: 'Forex' },
+  USDHKD: { display: 'USD/HKD', segment: 'Forex' },
   XAUUSD: { display: 'Gold', segment: 'Commodities' },
   XAGUSD: { display: 'Silver', segment: 'Commodities' },
   USOIL: { display: 'Crude Oil', segment: 'Commodities' },
   US30: { display: 'Dow Jones', segment: 'Indices' },
   NAS100: { display: 'NASDAQ', segment: 'Indices' },
   US500: { display: 'S&P 500', segment: 'Indices' },
+  UK100: { display: 'FTSE 100', segment: 'Indices' },
+  GER40: { display: 'DAX 40', segment: 'Indices' },
   BTCUSD: { display: 'Bitcoin', segment: 'Crypto' },
   ETHUSD: { display: 'Ethereum', segment: 'Crypto' },
   LTCUSD: { display: 'Litecoin', segment: 'Crypto' },
   XRPUSD: { display: 'Ripple', segment: 'Crypto' },
+  SOLUSD: { display: 'Solana', segment: 'Crypto' },
 };
 
-function fallbackDigits(symbol: string): number {
-  if (['USDJPY', 'EURJPY', 'GBPJPY'].includes(symbol)) return 3;
-  if (['XAUUSD', 'USOIL', 'BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD'].includes(symbol)) return 2;
-  if (['US30', 'US500', 'NAS100'].includes(symbol)) return 1;
+function getDigits(symbol: string): number {
+  if (['USDJPY', 'EURJPY', 'GBPJPY', 'AUDJPY', 'CADJPY', 'NZDJPY'].includes(symbol)) return 3;
+  if (symbol === 'XRPUSD') return 4;
+  if (['XAUUSD', 'USOIL', 'BTCUSD', 'ETHUSD', 'LTCUSD', 'SOLUSD'].includes(symbol)) return 2;
+  if (['US30', 'US500', 'NAS100', 'UK100', 'GER40'].includes(symbol)) return 1;
   return 5;
 }
 
-function formatTickTime(iso?: string): string {
-  if (!iso) return '--:--:--';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '--:--:--';
-  return d.toLocaleTimeString(undefined, { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-
-type Trend = 'up' | 'down' | 'neutral';
-
-function pointsDelta(bid: number, open: number, digits: number): number {
-  return Math.round((bid - open) * 10 ** digits);
-}
-
-/** MT5-style quote: small prefix + bold “pips” + superscript pipette. Bid/ask = classic red/cyan. */
-function Mt5Price({
-  value,
-  digits,
-  trend,
-  quoteSide,
-  compact,
-}: {
-  value: number;
-  digits: number;
-  trend: Trend;
-  quoteSide?: 'bid' | 'ask';
-  compact?: boolean;
-}) {
-  const color =
-    quoteSide === 'bid'
-      ? MT5.down
-      : quoteSide === 'ask'
-        ? MT5.up
-        : trend === 'up'
-          ? MT5.up
-          : trend === 'down'
-            ? MT5.down
-            : MT5.muted;
-  const s = value.toFixed(digits);
-  const dot = s.indexOf('.');
-  const sm = compact ? 'text-[11px] sm:text-[12px]' : 'text-[12px] sm:text-[13px]';
-  const md = compact ? 'text-[13px] sm:text-[15px]' : 'text-[15px] sm:text-[18px]';
-  const xs = compact ? 'text-[7px] sm:text-[8px]' : 'text-[8px] sm:text-[9px]';
-  const plain = compact ? 'text-[12px] sm:text-[13px]' : 'text-[13px] sm:text-[14px]';
-  if (dot < 0) {
-    return (
-      <span className={clsx('font-mono tabular-nums font-semibold', plain)} style={{ color }}>
-        {s}
-      </span>
-    );
+function splitPip(priceStr: string): { prefix: string; large: string; pip: string } {
+  const dotIdx = priceStr.indexOf('.');
+  if (dotIdx === -1) {
+    const l = priceStr.length;
+    return { prefix: priceStr.slice(0, Math.max(0, l - 3)), large: priceStr.slice(Math.max(0, l - 3), l - 1), pip: priceStr.slice(-1) };
   }
-  const intp = s.slice(0, dot);
-  const frac = s.slice(dot + 1).padEnd(digits, '0').slice(0, digits);
-  if (frac.length < 3) {
-    return (
-      <span className={clsx('font-mono tabular-nums font-semibold', plain)} style={{ color }}>
-        {intp}.{frac}
-      </span>
-    );
-  }
-  const pipette = frac.slice(-1);
-  const bigPips = frac.slice(-3, -1);
-  const smallFrac = frac.slice(0, -3);
-
-  return (
-    <span className="font-mono tabular-nums inline-flex items-baseline leading-none" style={{ color }}>
-      <span className={clsx(sm, 'font-semibold tracking-tight')}>
-        {intp}.{smallFrac}
-      </span>
-      <span className={clsx(md, 'font-black tracking-tighter mx-[0.5px]')}>{bigPips}</span>
-      <span className={clsx(xs, 'font-bold self-start mt-[2px] ml-[0.5px]')}>{pipette}</span>
-    </span>
-  );
+  const dec = priceStr.slice(dotIdx + 1);
+  if (dec.length === 0) return { prefix: priceStr, large: '', pip: '' };
+  if (dec.length === 1) return { prefix: priceStr.slice(0, dotIdx + 1), large: dec, pip: '' };
+  const pip = dec.slice(-1);
+  const largeStart = Math.max(0, dec.length - 3);
+  const large = dec.slice(largeStart, dec.length - 1);
+  const smallDec = dec.slice(0, largeStart);
+  return { prefix: priceStr.slice(0, dotIdx + 1) + smallDec, large, pip };
 }
 
-function SpreadIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="11" height="9" viewBox="0 0 11 9" fill="none" aria-hidden>
-      <path d="M0 4.5h2.5M8.5 4.5H11M2.5 2v5M8.5 2v5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
+import MobileOrderSheet from '@/components/trading/MobileOrderSheet';
 
 export default function Watchlist() {
   const router = useRouter();
@@ -135,32 +86,28 @@ export default function Watchlist() {
   const [segment, setSegment] = useState('All');
   const [flashMap, setFlashMap] = useState<Record<string, Trend>>({});
   const [activeOrderSymbol, setActiveOrderSymbol] = useState<string | null>(null);
-  const [sessionStats, setSessionStats] = useState<
-    Record<string, { open: number; high: number; low: number }>
-  >({});
 
-  const digitsFor = useCallback(
-    (symbol: string) => instruments.find((i: InstrumentInfo) => i.symbol === symbol)?.digits ?? fallbackDigits(symbol),
-    [instruments],
-  );
-
-  const pipFor = useCallback(
-    (symbol: string) => instruments.find((i: InstrumentInfo) => i.symbol === symbol)?.pip_size ?? 0.0001,
-    [instruments],
-  );
+  const sessionOpenRef = useRef<Record<string, number>>({});
+  const dayLowRef = useRef<Record<string, number>>({});
+  const dayHighRef = useRef<Record<string, number>>({});
+  const lastTimeRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
-    setSessionStats((prev) => {
-      const next = { ...prev };
-      for (const symbol of watchlist) {
-        const t = prices[symbol];
-        if (!t) continue;
-        const cur = next[symbol];
-        if (!cur) next[symbol] = { open: t.bid, high: t.bid, low: t.bid };
-        else next[symbol] = { ...cur, high: Math.max(cur.high, t.bid), low: Math.min(cur.low, t.bid) };
+    for (const symbol of watchlist) {
+      const tick = prices[symbol];
+      if (!tick) continue;
+      if (!(symbol in sessionOpenRef.current)) {
+        sessionOpenRef.current[symbol] = tick.bid;
+        dayLowRef.current[symbol] = tick.bid;
+        dayHighRef.current[symbol] = tick.bid;
+      } else {
+        if (tick.bid < dayLowRef.current[symbol]) dayLowRef.current[symbol] = tick.bid;
+        if (tick.bid > dayHighRef.current[symbol]) dayHighRef.current[symbol] = tick.bid;
       }
-      return next;
-    });
+      lastTimeRef.current[symbol] = new Date().toLocaleTimeString('en-GB', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      });
+    }
   }, [prices, watchlist]);
 
   useEffect(() => {
@@ -192,8 +139,9 @@ export default function Watchlist() {
     return true;
   });
 
-  const handleSwitchToChart = (symbol: string) => {
+  const handleRowClick = (symbol: string) => {
     setSelectedSymbol(symbol);
+    setActiveOrderSymbol(symbol);
     router.push(`/trading?view=chart`);
   };
 
@@ -243,8 +191,8 @@ export default function Watchlist() {
             className={clsx(
               'px-4 py-1.5 text-xs font-bold rounded-full transition-all duration-200 whitespace-nowrap border',
               segment === seg
-                ? 'text-black border-transparent shadow-lg'
-                : 'bg-transparent text-white/45 border-white/10 hover:text-white/70',
+                ? 'bg-buy text-white border-buy shadow-lg shadow-buy/20'
+                : 'bg-bg-secondary text-text-tertiary border-border-glass hover:text-text-secondary hover:border-text-tertiary/30',
             )}
             style={
               segment === seg
@@ -261,8 +209,7 @@ export default function Watchlist() {
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain touch-pan-y">
         {filtered.map((symbol) => {
           const tick = prices[symbol];
-          const digits = digitsFor(symbol);
-          const pip = pipFor(symbol);
+          const digits = getDigits(symbol);
           const flash = flashMap[symbol];
           const trend: Trend = flash ?? 'neutral';
           const sess = sessionStats[symbol];
@@ -278,128 +225,136 @@ export default function Watchlist() {
           const spreadPips = tick && pip > 0 ? Math.max(0, Math.round(tick.spread / pip)) : 0;
           const isSelected = selectedSymbol === symbol;
 
+          const sessionOpen = sessionOpenRef.current[symbol];
+          const dayLow = dayLowRef.current[symbol];
+          const dayHigh = dayHighRef.current[symbol];
+          const lastTime = lastTimeRef.current[symbol];
+
+          const pipChange =
+            tick && sessionOpen != null
+              ? Math.round((tick.bid - sessionOpen) * Math.pow(10, digits - 1))
+              : null;
+          const pctChange =
+            tick && sessionOpen != null && sessionOpen !== 0
+              ? ((tick.bid - sessionOpen) / sessionOpen) * 100
+              : null;
+          const spread =
+            tick != null
+              ? Math.round((tick.ask - tick.bid) * Math.pow(10, digits - 1))
+              : null;
+
+          const bidSplit = tick ? splitPip(tick.bid.toFixed(digits)) : null;
+          const askSplit = tick ? splitPip(tick.ask.toFixed(digits)) : null;
+
+          const priceColor =
+            flash === 'up'
+              ? 'text-buy'
+              : flash === 'down'
+                ? 'text-sell'
+                : pctChange != null && pctChange > 0
+                  ? 'text-buy'
+                  : 'text-sell';
+
           return (
             <div
               key={symbol}
-              role="button"
-              tabIndex={0}
-              onClick={() => setActiveOrderSymbol(symbol)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  setActiveOrderSymbol(symbol);
-                }
-              }}
+              onClick={() => handleRowClick(symbol)}
               className={clsx(
-                'relative grid w-full grid-cols-[auto_minmax(7rem,1fr)_auto] gap-x-2 sm:gap-x-3 items-center px-3 py-3 sm:px-4 sm:py-3.5 border-b border-white/[0.06] transition-colors',
-                'active:bg-white/[0.04] cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-[#50A5F1]/40',
+                'cursor-pointer hover:bg-bg-hover/30 active:bg-buy/5 transition-colors px-3 py-3 border-l-2',
+                symbol === selectedSymbol ? 'border-buy bg-buy/5' : 'border-transparent hover:border-buy/40',
               )}
             >
-              {isSelected && (
-                <div
-                  className="absolute bottom-0 left-0 z-10 w-0 h-0 border-[7px] border-transparent"
-                  style={{ borderBottomColor: MT5.corner, borderLeftColor: MT5.corner }}
-                  aria-hidden
-                />
-              )}
+              <div className="flex items-start justify-between gap-2">
+                {/* ── Left: change badge · symbol name · time + spread ── */}
+                <div className="min-w-0 flex flex-col gap-0.5">
+                  {/* pip change + % change */}
+                  <div className="flex items-center gap-1.5 h-4">
+                    {pipChange != null && (
+                      <span
+                        className={clsx(
+                          'text-[11px] font-mono leading-none',
+                          pipChange >= 0 ? 'text-buy' : 'text-sell',
+                        )}
+                      >
+                        {pipChange >= 0 ? '+' : ''}
+                        {pipChange}
+                      </span>
+                    )}
+                    {pctChange != null && (
+                      <span
+                        className={clsx(
+                          'text-[11px] font-bold leading-none',
+                          pctChange >= 0 ? 'text-buy' : 'text-sell',
+                        )}
+                      >
+                        {pctChange >= 0 ? '+' : ''}
+                        {pctChange.toFixed(2)}%
+                      </span>
+                    )}
+                  </div>
 
-              {/* Star */}
-              <button
-                type="button"
-                onClick={(e) => e.stopPropagation()}
-                className="shrink-0 self-center p-1 opacity-40 hover:opacity-80 transition-opacity"
-                style={{ color: MT5.muted }}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
-                  />
-                </svg>
-              </button>
-
-              {/* Left column — full symbol / name (no ellipsis) */}
-              <div className="min-w-0 flex flex-col gap-0.5 justify-center overflow-visible">
-                <div
-                  className={clsx(
-                    'text-[11px] sm:text-xs font-bold font-mono tabular-nums tracking-tight leading-tight',
-                    changePositive && 'text-[#50A5F1]',
-                    changeNegative && 'text-[#EC5B5B]',
-                    pts == null && 'text-[#808080]',
-                  )}
-                >
-                  {pts != null && pctNum != null ? `${ptsStr} ${pctStr}` : '—  —%'}
-                </div>
-                <div className="flex items-start gap-1.5 min-w-0">
-                  <span className="text-[15px] sm:text-base font-black text-white tracking-tight break-words [overflow-wrap:anywhere]">
+                  {/* Symbol name — large bold */}
+                  <div className="text-[18px] sm:text-[19px] font-extrabold text-text-primary tracking-tight leading-tight">
                     {symbol}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSwitchToChart(symbol);
-                    }}
-                    className="shrink-0 p-1 rounded-md hover:bg-white/10 opacity-50 hover:opacity-90 transition-all"
-                    style={{ color: MT5.muted }}
-                    title="Chart"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18M7 12l4-4 4 4 6-6" />
-                    </svg>
-                  </button>
-                </div>
-                <div
-                  className="text-[10px] font-medium uppercase tracking-wide break-words [overflow-wrap:anywhere] opacity-50 leading-snug"
-                  style={{ color: MT5.muted }}
-                >
-                  {displayFor(symbol)}
-                </div>
-                <div
-                  className="flex items-center gap-1.5 text-[10px] font-mono tabular-nums mt-0.5"
-                  style={{ color: MT5.muted }}
-                >
-                  <span>{formatTickTime(tick?.timestamp)}</span>
-                  <SpreadIcon className="shrink-0 opacity-70" />
-                  <span>{spreadPips}</span>
-                </div>
-              </div>
+                  </div>
 
-              {/* Right column — bid / ask (red/cyan) + labels + session range */}
-              <div className="shrink-0 flex flex-col items-end justify-center gap-1 pr-0.5 min-w-0">
-                <div className="flex items-end gap-2 sm:gap-3">
-                  {tick ? (
-                    <>
-                      <div className="flex flex-col items-end gap-0.5">
-                        <Mt5Price value={tick.bid} digits={digits} trend={trend} quoteSide="bid" compact />
-                        <span className="text-[9px] font-bold uppercase tracking-wider opacity-60" style={{ color: MT5.muted }}>
-                          Bid
-                        </span>
-                      </div>
-                      <div className="flex flex-col items-end gap-0.5">
-                        <Mt5Price value={tick.ask} digits={digits} trend={trend} quoteSide="ask" compact />
-                        <span className="text-[9px] font-bold uppercase tracking-wider opacity-60" style={{ color: MT5.muted }}>
-                          Ask
-                        </span>
-                      </div>
-                    </>
-                  ) : (
-                    <span className="text-sm font-mono" style={{ color: MT5.muted }}>
-                      — / —
-                    </span>
-                  )}
+                  {/* time · spread */}
+                  <div className="flex items-center gap-2 text-[10px] text-text-tertiary font-mono">
+                    {lastTime && <span>{lastTime}</span>}
+                    {spread != null && (
+                      <span className="flex items-center gap-0.5">
+                        <span className="font-bold not-italic">⇔</span>
+                        <span>{spread}</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div
-                  className="text-[9px] sm:text-[10px] font-mono tabular-nums text-right leading-tight max-w-[min(100%,14rem)] break-words"
-                  style={{ color: MT5.muted }}
-                >
-                  {sess && tick ? (
-                    <>
-                      L: {sess.low.toFixed(digits)}&nbsp;&nbsp;H: {sess.high.toFixed(digits)}
-                    </>
-                  ) : (
-                    'L: —  H: —'
+
+                {/* ── Right: formatted bid · ask  +  L/H ── */}
+                <div className="flex flex-col items-end shrink-0 gap-0.5">
+                  {/* Bid + Ask in pip format */}
+                  <div className="flex items-baseline gap-3">
+                    {/* Bid */}
+                    <div className={clsx('font-mono flex items-baseline transition-colors', priceColor)}>
+                      {bidSplit ? (
+                        <>
+                          <span className="text-[13px] leading-none">{bidSplit.prefix}</span>
+                          <span className="text-[22px] font-bold leading-none">{bidSplit.large}</span>
+                          {bidSplit.pip && (
+                            <span className="text-[12px] font-bold leading-none self-start mt-0.5">
+                              {bidSplit.pip}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-[15px]">--</span>
+                      )}
+                    </div>
+
+                    {/* Ask */}
+                    <div className={clsx('font-mono flex items-baseline transition-colors', priceColor)}>
+                      {askSplit ? (
+                        <>
+                          <span className="text-[13px] leading-none">{askSplit.prefix}</span>
+                          <span className="text-[22px] font-bold leading-none">{askSplit.large}</span>
+                          {askSplit.pip && (
+                            <span className="text-[12px] font-bold leading-none self-start mt-0.5">
+                              {askSplit.pip}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-[15px]">--</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Session Low / High */}
+                  {tick && dayLow != null && dayHigh != null && (
+                    <div className="flex gap-3 text-[10px] text-text-tertiary font-mono">
+                      <span>L: {dayLow.toFixed(digits)}</span>
+                      <span>H: {dayHigh.toFixed(digits)}</span>
+                    </div>
                   )}
                 </div>
               </div>
@@ -409,7 +364,10 @@ export default function Watchlist() {
       </div>
 
       {activeOrderSymbol && (
-        <MobileOrderSheet symbol={activeOrderSymbol} onClose={() => setActiveOrderSymbol(null)} />
+        <MobileOrderSheet
+          symbol={activeOrderSymbol}
+          onClose={() => setActiveOrderSymbol(null)}
+        />
       )}
     </div>
   );

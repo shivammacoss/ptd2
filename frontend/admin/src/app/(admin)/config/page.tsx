@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { adminApi } from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -12,7 +12,6 @@ import {
   Edit3,
   Loader2,
   RefreshCw,
-  Save,
   Settings,
   X,
 } from 'lucide-react';
@@ -22,20 +21,16 @@ interface InstrumentConfig {
   symbol: string;
   display_name: string;
   segment: string;
+  segment_label?: string;
   segment_id: string | null;
   pip_size: number;
   digits: number;
   contract_size: number;
+  is_active?: boolean;
   charge: { type: string; value: number } | null;
   spread: { type: string; value: number } | null;
   swap: { long: number; short: number; free: boolean } | null;
-}
-
-function spreadPrice(val: number, pip: number): string {
-  const price = val * pip;
-  if (price >= 1) return `±$${price.toFixed(2)}`;
-  if (price >= 0.01) return `±$${price.toFixed(4)}`;
-  return `±${price.toFixed(6)}`;
+  price_impact?: number | null;
 }
 
 interface EditState {
@@ -43,6 +38,7 @@ interface EditState {
   commission_type: string;
   spread: string;
   spread_type: string;
+  price_impact: string;
   swap_long: string;
   swap_short: string;
   swap_free: boolean;
@@ -54,22 +50,32 @@ const CONFIG_LINKS = [
   { href: '/config/swaps', icon: RefreshCw, title: 'Swaps', desc: 'Per-instrument & per-user rules' },
 ];
 
+const SEGMENT_OPTIONS = ['forex', 'indices', 'commodities', 'crypto', 'stocks', 'energies'];
+
 export default function ConfigPage() {
   const [instruments, setInstruments] = useState<InstrumentConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [segmentFilter, setSegmentFilter] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState({ symbol: '', display_name: '', segment: 'forex' });
+  const [adding, setAdding] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await adminApi.get<{ items: InstrumentConfig[] }>('/config/instruments');
+      const params: Record<string, string> = {};
+      if (search.trim()) params.search = search.trim();
+      if (segmentFilter) params.segment = segmentFilter;
+      const data = await adminApi.get<{ items: InstrumentConfig[] }>('/config/instruments', params);
       setInstruments(data.items || []);
     } catch {} finally {
       setLoading(false);
     }
-  }, []);
+  }, [search, segmentFilter]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -79,7 +85,8 @@ export default function ConfigPage() {
       commission: inst.charge?.value?.toString() ?? '',
       commission_type: inst.charge?.type ?? 'commission_per_lot',
       spread: inst.spread?.value?.toString() ?? '',
-      spread_type: inst.spread?.type ?? 'fixed',
+      spread_type: inst.spread?.type ?? 'pips',
+      price_impact: inst.price_impact != null ? String(inst.price_impact) : '',
       swap_long: inst.swap?.long?.toString() ?? '0',
       swap_short: inst.swap?.short?.toString() ?? '0',
       swap_free: inst.swap?.free ?? false,
@@ -101,12 +108,15 @@ export default function ConfigPage() {
         body.spread = parseFloat(editState.spread);
         body.spread_type = editState.spread_type;
       }
+      if (editState.price_impact !== '') {
+        body.price_impact = parseFloat(editState.price_impact) || 0;
+      }
       body.swap_long = parseFloat(editState.swap_long) || 0;
       body.swap_short = parseFloat(editState.swap_short) || 0;
       body.swap_free = editState.swap_free;
 
       await adminApi.put(`/config/instrument/${inst.id}`, body);
-      toast.success(`${inst.symbol} config saved`);
+      toast.success(`${inst.symbol} config updated successfully`);
       setEditingId(null);
       setEditState(null);
       fetchData();
@@ -117,7 +127,31 @@ export default function ConfigPage() {
     }
   };
 
-  const segments = Array.from(new Set(instruments.map((i) => i.segment))).filter(Boolean).sort();
+  const groupKey = (i: InstrumentConfig) => i.segment_label || i.segment || 'OTHER';
+  const segments = Array.from(new Set(instruments.map(groupKey))).filter(Boolean).sort();
+
+  const submitAdd = async () => {
+    if (!addForm.symbol.trim()) {
+      toast.error('Symbol required');
+      return;
+    }
+    setAdding(true);
+    try {
+      await adminApi.post('/instruments', {
+        symbol: addForm.symbol.trim().toUpperCase(),
+        display_name: addForm.display_name.trim() || addForm.symbol.trim().toUpperCase(),
+        segment: addForm.segment,
+      });
+      toast.success('Instrument added');
+      setShowAdd(false);
+      setAddForm({ symbol: '', display_name: '', segment: 'forex' });
+      fetchData();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed');
+    } finally {
+      setAdding(false);
+    }
+  };
 
   return (
     <>
@@ -145,11 +179,82 @@ export default function ConfigPage() {
         </div>
 
         <div className="bg-bg-secondary border border-border-primary rounded-md">
-          <div className="px-4 py-3 border-b border-border-primary flex items-center gap-2">
+          <div className="px-4 py-3 border-b border-border-primary flex flex-wrap items-center gap-2 gap-y-2">
             <Settings size={14} className="text-text-tertiary" />
             <h2 className="text-xs font-semibold text-text-primary">All Instruments</h2>
-            <span className="ml-auto text-xxs text-text-tertiary">{instruments.length} instruments · Click <Edit3 size={10} className="inline" /> to edit</span>
+            <span className="text-xxs text-text-tertiary sm:ml-2">{instruments.length} instruments · Click row to edit</span>
+            <div className="w-full sm:w-auto sm:ml-auto flex flex-wrap items-center gap-2">
+              <input
+                type="search"
+                placeholder="Search symbol…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="text-xs px-2 py-1.5 rounded-md bg-bg-input border border-border-primary text-text-primary w-40"
+              />
+              <select
+                value={segmentFilter}
+                onChange={(e) => setSegmentFilter(e.target.value)}
+                className="text-xs py-1.5 px-2 rounded-md bg-bg-input border border-border-primary text-text-primary"
+              >
+                <option value="">All categories</option>
+                {SEGMENT_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => fetchData()}
+                className="text-xxs px-2 py-1.5 rounded-md border border-border-primary text-text-secondary hover:text-buy"
+              >
+                Apply
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAdd(true)}
+                className="text-xxs px-3 py-1.5 rounded-md bg-buy text-white font-semibold hover:opacity-90"
+              >
+                Add Instrument
+              </button>
+            </div>
           </div>
+
+          {showAdd && (
+            <div className="px-4 py-3 border-b border-border-primary bg-bg-tertiary/30 flex flex-wrap items-end gap-2">
+              <div>
+                <label className="text-xxs text-text-tertiary block mb-0.5">Symbol</label>
+                <input
+                  value={addForm.symbol}
+                  onChange={(e) => setAddForm({ ...addForm, symbol: e.target.value })}
+                  className="text-xs px-2 py-1 rounded bg-bg-input border border-border-primary text-text-primary w-28 uppercase"
+                  placeholder="XAUUSD"
+                />
+              </div>
+              <div>
+                <label className="text-xxs text-text-tertiary block mb-0.5">Display name</label>
+                <input
+                  value={addForm.display_name}
+                  onChange={(e) => setAddForm({ ...addForm, display_name: e.target.value })}
+                  className="text-xs px-2 py-1 rounded bg-bg-input border border-border-primary text-text-primary w-48"
+                />
+              </div>
+              <div>
+                <label className="text-xxs text-text-tertiary block mb-0.5">Segment</label>
+                <select
+                  value={addForm.segment}
+                  onChange={(e) => setAddForm({ ...addForm, segment: e.target.value })}
+                  className="text-xs py-1 px-2 rounded bg-bg-input border border-border-primary text-text-primary"
+                >
+                  {SEGMENT_OPTIONS.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <button type="button" disabled={adding} onClick={submitAdd} className="text-xxs px-3 py-1.5 rounded-md bg-success text-white font-semibold disabled:opacity-50">
+                {adding ? 'Saving…' : 'Create'}
+              </button>
+              <button type="button" onClick={() => setShowAdd(false)} className="text-xxs text-text-tertiary">Cancel</button>
+            </div>
+          )}
 
           {loading ? (
             <div className="flex items-center justify-center py-16"><Loader2 size={20} className="animate-spin text-text-tertiary" /></div>
@@ -165,11 +270,11 @@ export default function ConfigPage() {
                 </thead>
                 <tbody>
                   {segments.map(seg => (
-                    <>
-                      <tr key={`seg-${seg}`} className="bg-bg-tertiary/20">
+                    <Fragment key={`seg-${seg}`}>
+                      <tr className="bg-bg-tertiary/20">
                         <td colSpan={8} className="px-3 py-1.5 text-xxs font-semibold text-text-secondary uppercase tracking-wider">{seg}</td>
                       </tr>
-                      {instruments.filter(i => i.segment === seg).map(inst => {
+                      {instruments.filter(i => groupKey(i) === seg).map(inst => {
                         const isEditing = editingId === inst.id;
                         const isSaving = saving === inst.id;
 
@@ -193,14 +298,16 @@ export default function ConfigPage() {
                               <td className="px-3 py-1.5">
                                 <div className="flex items-center gap-1 justify-center">
                                   <input type="number" step="0.1" min="0" value={editState.spread} onChange={e => setEditState({ ...editState, spread: e.target.value })} placeholder="0" className="w-16 px-1.5 py-1 text-xs bg-bg-input border border-border-primary rounded text-center font-mono tabular-nums text-text-primary" />
-                                  <select value={editState.spread_type} onChange={e => setEditState({ ...editState, spread_type: e.target.value })} className="text-xxs py-1 px-1 bg-bg-input border border-border-primary rounded text-text-primary">
+                                  <select value={editState.spread_type} onChange={e => setEditState({ ...editState, spread_type: e.target.value })} className="text-xxs py-1 px-1 bg-bg-input border border-border-primary rounded text-text-primary max-w-[5.5rem]">
+                                    <option value="pips">pips</option>
                                     <option value="fixed">fix</option>
                                     <option value="variable">var</option>
+                                    <option value="percentage">%</option>
                                   </select>
                                 </div>
                               </td>
                               <td className="px-3 py-1.5 text-center">
-                                <span className="text-xxs text-warning font-mono">{editState.spread ? spreadPrice(parseFloat(editState.spread), inst.pip_size) : '—'}</span>
+                                <input type="number" step="any" min="0" value={editState.price_impact} onChange={e => setEditState({ ...editState, price_impact: e.target.value })} placeholder="0" className="w-20 px-1.5 py-1 text-xs bg-bg-input border border-border-primary rounded text-center font-mono text-warning" />
                               </td>
                               <td className="px-3 py-1.5 text-center">
                                 <input type="number" step="0.01" value={editState.swap_long} onChange={e => setEditState({ ...editState, swap_long: e.target.value })} className="w-16 px-1.5 py-1 text-xs bg-bg-input border border-border-primary rounded text-center font-mono tabular-nums text-text-primary" />
@@ -231,6 +338,7 @@ export default function ConfigPage() {
                           <tr key={inst.id} className="border-b border-border-primary/50 hover:bg-bg-hover/50 transition-fast group cursor-pointer" onClick={() => startEdit(inst)}>
                             <td className="px-3 py-2">
                               <span className="text-xs text-text-primary font-semibold">{inst.symbol}</span>
+                              {inst.is_active === false && <span className="text-xxs text-danger ml-1">(off)</span>}
                               <span className="text-xxs text-text-tertiary ml-1.5">{inst.display_name}</span>
                             </td>
                             <td className="px-3 py-2 text-xs text-center font-mono tabular-nums text-text-secondary">
@@ -240,7 +348,11 @@ export default function ConfigPage() {
                               {inst.spread ? <span>{inst.spread.value} <span className="text-xxs text-text-tertiary">pips</span></span> : <span className="text-text-tertiary">—</span>}
                             </td>
                             <td className="px-3 py-2 text-center">
-                              {inst.spread ? <span className="text-xxs text-warning font-mono">{spreadPrice(inst.spread.value, inst.pip_size)}</span> : <span className="text-xxs text-text-tertiary">—</span>}
+                              {inst.price_impact != null && inst.price_impact > 0 ? (
+                                <span className="text-xxs text-warning font-mono">+{Number(inst.price_impact).toFixed(4)}</span>
+                              ) : (
+                                <span className="text-xxs text-text-tertiary">—</span>
+                              )}
                             </td>
                             <td className={cn('px-3 py-2 text-xs text-center font-mono tabular-nums', (inst.swap?.long ?? 0) < 0 ? 'text-danger' : 'text-text-secondary')}>
                               {inst.swap ? inst.swap.long : '—'}
@@ -261,7 +373,7 @@ export default function ConfigPage() {
                           </tr>
                         );
                       })}
-                    </>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

@@ -188,8 +188,47 @@ class Instrument(Base):
     trading_hours = Column(JSONB)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     segment = relationship("InstrumentSegment", lazy="selectin")
+
+
+class InstrumentConfig(Base):
+    """Single admin-editable row per instrument; synced to charge/spread/swap config tables."""
+
+    __tablename__ = "instrument_configs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    instrument_id = Column(UUID(as_uuid=True), ForeignKey("instruments.id", ondelete="CASCADE"), unique=True, nullable=False)
+    commission_value = Column(Numeric(18, 8))
+    commission_type = Column(String(30), nullable=False, default="per_lot")
+    spread_value = Column(Numeric(18, 8))
+    spread_type = Column(String(20), nullable=False, default="pips")
+    price_impact = Column(Numeric(18, 8), nullable=False, default=Decimal("0"))
+    swap_long = Column(Numeric(18, 8), default=Decimal("0"))
+    swap_short = Column(Numeric(18, 8), default=Decimal("0"))
+    swap_free = Column(Boolean, nullable=False, default=False)
+    min_lot_size = Column(Numeric(10, 4), default=Decimal("0.01"))
+    max_lot_size = Column(Numeric(10, 4), default=Decimal("100"))
+    leverage_max = Column(Integer, default=2000)
+    is_enabled = Column(Boolean, nullable=False, default=True)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+
+    instrument = relationship("Instrument", lazy="selectin")
+
+
+class InstrumentConfigAudit(Base):
+    __tablename__ = "instrument_config_audit"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    instrument_id = Column(UUID(as_uuid=True), ForeignKey("instruments.id", ondelete="CASCADE"), nullable=False)
+    field_changed = Column(String(64), nullable=False)
+    old_value = Column(Text)
+    new_value = Column(Text)
+    changed_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    changed_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    ip_address = Column(String(64))
 
 
 # ============================================
