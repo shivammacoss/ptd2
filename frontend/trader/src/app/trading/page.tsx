@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { clsx } from 'clsx';
-import { useUIStore } from '@/stores/uiStore';
+import { useUIStore, WATCHLIST_LAYOUT } from '@/stores/uiStore';
 import { useTradingStore, InstrumentInfo } from '@/stores/tradingStore';
 import toast from 'react-hot-toast';
 import { sounds, unlockAudio } from '@/lib/sounds';
@@ -13,6 +13,9 @@ import OrderPanel from '@/components/trading/OrderPanel';
 import PositionsPanel from '@/components/trading/PositionsPanel';
 
 const TradingViewChart = dynamic(() => import('@/components/charts/TradingViewChart'), { ssr: false });
+
+const WATCHLIST_MIN = WATCHLIST_LAYOUT.min;
+const WATCHLIST_MAX = WATCHLIST_LAYOUT.max;
 
 function DragHandleV({ onDrag }: { onDrag: (deltaX: number) => void }) {
   const [dragging, setDragging] = useState(false);
@@ -87,10 +90,15 @@ export default function TradingPage() {
     setWatchlistWidth, setOrderPanelWidth, setBottomPanelHeight
   } = useUIStore();
 
-  const [wlW, setWlW] = useState(watchlistWidth);
+  const [wlW, setWlW] = useState(() => Math.max(WATCHLIST_MIN, watchlistWidth));
   const [opW, setOpW] = useState(orderPanelWidth);
   const [bpH, setBpH] = useState(bottomPanelHeight);
   const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const clamped = Math.max(WATCHLIST_MIN, Math.min(WATCHLIST_MAX, watchlistWidth));
+    setWlW(clamped);
+  }, [watchlistWidth]);
   const [lotSize, setLotSize] = useState('0.01');
   const [chartTabs, setChartTabs] = useState<string[]>([]);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
@@ -174,8 +182,8 @@ export default function TradingPage() {
     };
 
     return (
-      <div className="flex-1 flex flex-col overflow-hidden bg-bg-primary">
-        <div className="flex-1 overflow-hidden relative">
+      <div className="flex-1 flex flex-col overflow-hidden bg-bg-primary min-h-0">
+        <div className="flex-1 min-h-0 overflow-hidden relative flex flex-col">
           {mobileView === 'watchlist' && <Watchlist />}
           {mobileView === 'chart' && (
             <div className="h-full flex flex-col">
@@ -273,15 +281,18 @@ export default function TradingPage() {
   }
 
   return (
-    <div className="flex-1 flex overflow-hidden">
+    <div className="flex-1 flex overflow-hidden min-h-0">
       {/* LEFT — Watchlist (draggable right edge) */}
-      <div className="shrink-0 overflow-hidden" style={{ width: wlW }}>
+      <div
+        className="shrink-0 flex flex-col h-full min-h-0 overflow-hidden"
+        style={{ width: Math.max(WATCHLIST_MIN, wlW) }}
+      >
         <Watchlist />
       </div>
 
       {/* Left drag handle */}
       <DragHandleV onDrag={(dx) => {
-        const next = Math.max(160, Math.min(350, watchlistWidth + dx));
+        const next = Math.max(WATCHLIST_MIN, Math.min(WATCHLIST_MAX, wlW + dx));
         setWlW(next);
         setWatchlistWidth(next);
       }} />

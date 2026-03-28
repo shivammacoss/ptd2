@@ -83,6 +83,7 @@ async def list_positions(
             current_price = float(tick["bid"]) if sv == "buy" else float(tick["ask"])
             profit = float(_calc_pnl(pos.side, pos.open_price, Decimal(str(current_price)), pos.lots, contract_size))
 
+        pos_status_val = pos.status.value if hasattr(pos.status, 'value') else str(pos.status)
         response.append({
             "id": str(pos.id),
             "account_id": str(pos.account_id),
@@ -96,7 +97,10 @@ async def list_positions(
             "swap": float(pos.swap or 0),
             "commission": float(pos.commission or 0),
             "profit": profit,
+            "status": pos_status_val,
+            "contract_size": float(contract_size),
             "created_at": pos.created_at.isoformat() if pos.created_at else None,
+            "closed_at": pos.closed_at.isoformat() if getattr(pos, 'closed_at', None) else None,
         })
 
     return response
