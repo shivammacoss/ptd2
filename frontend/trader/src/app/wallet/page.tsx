@@ -21,6 +21,9 @@ import {
   X,
   Banknote,
   Bitcoin,
+  Filter,
+  ChevronLeft,
+  Calendar,
 } from 'lucide-react';
 
 interface Transaction {
@@ -117,7 +120,7 @@ function mergeWalletHistory(
   return merged;
 }
 
-const RECENT_LIMIT = 8;
+const PAGE_SIZES = [10, 25, 50];
 
 const DEPOSIT_METHODS = [
   { value: 'bank_transfer', label: 'Bank Transfer', icon: Banknote },
@@ -132,8 +135,15 @@ export default function WalletPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showAllTx, setShowAllTx] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Filters & pagination
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo]     = useState('');
+  const [typeFilter, setTypeFilter]     = useState<'all' | 'deposit' | 'withdrawal'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'pending' | 'failed'>('all');
+  const [page, setPage]         = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [accountId, setAccountId] = useState<string | null>(null);
   const loadGen = useRef(0);
   const fundingRef = useRef<HTMLDivElement>(null);
@@ -247,7 +257,33 @@ export default function WalletPage() {
       currency: wallet?.currency || 'USD',
     }).format(n);
 
-  const visibleTx = showAllTx ? transactions : transactions.slice(0, RECENT_LIMIT);
+  const filteredTx = transactions.filter((tx) => {
+    if (typeFilter !== 'all' && tx.type !== typeFilter) return false;
+    if (statusFilter !== 'all' && tx.status !== statusFilter) return false;
+    if (dateFrom) {
+      const from = new Date(dateFrom);
+      from.setHours(0, 0, 0, 0);
+      if (new Date(tx.created_at) < from) return false;
+    }
+    if (dateTo) {
+      const to = new Date(dateTo);
+      to.setHours(23, 59, 59, 999);
+      if (new Date(tx.created_at) > to) return false;
+    }
+    return true;
+  });
+
+  const totalPages  = Math.max(1, Math.ceil(filteredTx.length / pageSize));
+  const safePage    = Math.min(page, totalPages);
+  const pagedTx     = filteredTx.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const resetFilters = () => {
+    setDateFrom('');
+    setDateTo('');
+    setTypeFilter('all');
+    setStatusFilter('all');
+    setPage(1);
+  };
 
   const openDepositModal = () => {
     setDepositAmount('');
@@ -432,32 +468,106 @@ export default function WalletPage() {
           <div className="emboss-divider my-2" />
 
           <div className="space-y-4">
+            {/* Header */}
             <div className="flex items-center justify-between">
               <h3 className="text-base md:text-lg font-bold text-text-primary flex items-center gap-2">
                 <History className="w-5 h-5 text-buy" />
-                Recent History
+                Transaction History
               </h3>
-              {transactions.length > RECENT_LIMIT && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllTx((v) => !v)}
-                  className="text-buy text-xs md:text-sm font-semibold hover:underline px-2 py-1 rounded hover:bg-buy/5 transition-colors"
-                >
-                  {showAllTx ? 'Show less' : 'View all'}
-                </button>
-              )}
+              <span className="text-xs text-text-tertiary">{filteredTx.length} record{filteredTx.length !== 1 ? 's' : ''}</span>
+            </div>
+
+            {/* Filters */}
+            <div className="bg-bg-secondary border border-border-primary rounded-xl p-3 md:p-4 space-y-3">
+              {/* Date range */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider flex items-center gap-1">
+                    <Calendar className="w-3 h-3" /> From
+                  </label>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+                    className="w-full px-3 py-2 rounded-lg border border-border-primary bg-bg-primary text-text-primary text-xs outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider flex items-center gap-1">
+                    <Calendar className="w-3 h-3" /> To
+                  </label>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+                    className="w-full px-3 py-2 rounded-lg border border-border-primary bg-bg-primary text-text-primary text-xs outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Type + Status filters */}
+              <div className="flex flex-wrap gap-2">
+                <div className="flex items-center gap-1 mr-1">
+                  <Filter className="w-3 h-3 text-text-tertiary" />
+                </div>
+                {(['all', 'deposit', 'withdrawal'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => { setTypeFilter(t); setPage(1); }}
+                    className={clsx(
+                      'px-3 py-1 text-xs font-semibold rounded-full border transition-all',
+                      typeFilter === t
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'border-border-primary bg-bg-primary text-text-secondary hover:border-blue-500/50',
+                    )}
+                  >
+                    {t === 'all' ? 'All Types' : t.charAt(0).toUpperCase() + t.slice(1) + 's'}
+                  </button>
+                ))}
+                <div className="w-px bg-border-primary mx-1 self-stretch" />
+                {(['all', 'completed', 'pending', 'failed'] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => { setStatusFilter(s); setPage(1); }}
+                    className={clsx(
+                      'px-3 py-1 text-xs font-semibold rounded-full border transition-all',
+                      statusFilter === s
+                        ? s === 'completed' ? 'bg-green-600 text-white border-green-600'
+                          : s === 'pending' ? 'bg-yellow-500 text-white border-yellow-500'
+                          : s === 'failed'  ? 'bg-red-600 text-white border-red-600'
+                          : 'bg-blue-600 text-white border-blue-600'
+                        : 'border-border-primary bg-bg-primary text-text-secondary hover:border-blue-500/50',
+                    )}
+                  >
+                    {s === 'all' ? 'All Status' : s.charAt(0).toUpperCase() + s.slice(1)}
+                  </button>
+                ))}
+                {(dateFrom || dateTo || typeFilter !== 'all' || statusFilter !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="px-3 py-1 text-xs font-semibold rounded-full border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-all ml-auto"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">
-              {!transactions.length ? (
+              {!pagedTx.length ? (
                 <div className="glass-card py-12 text-center border-dashed border-border-glass/40">
                   <div className="w-12 h-12 bg-bg-secondary rounded-full flex items-center justify-center mx-auto mb-3">
                     <Clock className="w-6 h-6 text-text-tertiary opacity-30" />
                   </div>
-                  <p className="text-text-tertiary text-sm">No recent transactions</p>
+                  <p className="text-text-tertiary text-sm">
+                    {filteredTx.length === 0 && transactions.length > 0 ? 'No transactions match filters' : 'No transactions yet'}
+                  </p>
                 </div>
               ) : (
-                visibleTx.map((tx) => (
+                pagedTx.map((tx) => (
                   <div
                     key={tx.id}
                     className="glass-card p-3 md:p-4 flex items-center gap-3 md:gap-4 group hover:bg-black/20 border-border-glass/30 transition-all active:bg-black/30"
@@ -528,6 +638,92 @@ export default function WalletPage() {
                 ))
               )}
             </div>
+
+            {/* Pagination */}
+            {filteredTx.length > 0 && (
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-text-tertiary">Rows:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                    className="text-xs border border-border-primary bg-bg-secondary text-text-primary rounded-lg px-2 py-1.5 outline-none focus:border-blue-500"
+                  >
+                    {PAGE_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPage(1)}
+                    disabled={safePage === 1}
+                    className="p-1.5 rounded-lg border border-border-primary bg-bg-secondary text-text-secondary disabled:opacity-30 hover:border-blue-500 hover:text-blue-500 transition-all"
+                    title="First page"
+                  >
+                    <ChevronLeft className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={safePage === 1}
+                    className="p-1.5 rounded-lg border border-border-primary bg-bg-secondary text-text-secondary disabled:opacity-30 hover:border-blue-500 hover:text-blue-500 transition-all"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  {/* Page number pills */}
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+                    .reduce<(number | 'ellipsis')[]>((acc, p, idx, arr) => {
+                      if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('ellipsis');
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((item, idx) =>
+                      item === 'ellipsis' ? (
+                        <span key={`e${idx}`} className="px-1 text-text-tertiary text-xs">…</span>
+                      ) : (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => setPage(item as number)}
+                          className={clsx(
+                            'min-w-[28px] h-7 px-1 rounded-lg text-xs font-bold border transition-all',
+                            safePage === item
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'border-border-primary bg-bg-secondary text-text-secondary hover:border-blue-500 hover:text-blue-500',
+                          )}
+                        >
+                          {item}
+                        </button>
+                      )
+                    )}
+
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={safePage === totalPages}
+                    className="p-1.5 rounded-lg border border-border-primary bg-bg-secondary text-text-secondary disabled:opacity-30 hover:border-blue-500 hover:text-blue-500 transition-all"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPage(totalPages)}
+                    disabled={safePage === totalPages}
+                    className="p-1.5 rounded-lg border border-border-primary bg-bg-secondary text-text-secondary disabled:opacity-30 hover:border-blue-500 hover:text-blue-500 transition-all"
+                    title="Last page"
+                  >
+                    <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
+
+                <span className="text-xs text-text-tertiary whitespace-nowrap">
+                  {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filteredTx.length)} of {filteredTx.length}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="bg-bg-secondary/50 border border-border-glass/20 rounded-xl p-4 flex gap-3">
