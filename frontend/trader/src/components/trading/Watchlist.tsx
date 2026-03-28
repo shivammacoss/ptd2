@@ -163,15 +163,13 @@ export default function Watchlist() {
 
   return (
     <div
-      className="h-full min-h-0 flex flex-col border-r border-white/[0.08]"
-      style={{ backgroundColor: MT5.bg }}
+      className="h-full min-h-0 flex flex-col border-r border-border-primary bg-bg-primary"
     >
       {/* Search */}
       <div className="p-3 shrink-0">
         <div className="relative">
           <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40"
-            style={{ color: MT5.muted }}
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40 text-text-secondary"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -184,13 +182,13 @@ export default function Watchlist() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search instruments..."
-            className="w-full pl-10 pr-3 py-2.5 text-sm rounded-xl border border-white/10 bg-white/[0.06] text-white placeholder:text-white/35 outline-none focus:border-[#50A5F1]/50 focus:ring-1 focus:ring-[#50A5F1]/20"
+            className="w-full pl-10 pr-3 py-2.5 text-sm rounded-xl border border-border-primary bg-bg-secondary text-text-primary placeholder:text-text-tertiary outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
           />
         </div>
       </div>
 
       {/* Category tabs */}
-      <div className="flex gap-2 px-3 pb-3 border-b border-white/[0.08] overflow-x-auto scrollbar-hide no-scrollbar shrink-0">
+      <div className="flex gap-2 px-3 pb-3 border-b border-border-primary overflow-x-auto scrollbar-hide no-scrollbar shrink-0">
         {['All', 'Starred', ...SEGMENTS.slice(1)].map((seg) => (
           <button
             key={seg}
@@ -202,11 +200,6 @@ export default function Watchlist() {
                 ? 'bg-buy text-white border-buy shadow-lg shadow-buy/20'
                 : 'bg-bg-secondary text-text-tertiary border-border-glass hover:text-text-secondary hover:border-text-tertiary/30',
             )}
-            style={
-              segment === seg
-                ? { backgroundColor: MT5.tabActive, boxShadow: '0 4px 14px rgba(80,165,241,0.25)' }
-                : undefined
-            }
           >
             {seg}
           </button>
