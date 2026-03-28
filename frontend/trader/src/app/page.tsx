@@ -49,7 +49,7 @@ export default function HomePage() {
                 </Link>
                 <Link
                   href="/auth/login"
-                  className="border border-gray-200 hover:border-blue-600 text-gray-900 font-semibold px-8 py-3.5 rounded-lg transition-colors"
+                  className="border border-gray-200 hover:border-blue-600 text-gray-800 font-semibold px-8 py-3.5 rounded-lg transition-colors"
                 >
                   Try Demo
                 </Link>
@@ -175,10 +175,10 @@ export default function HomePage() {
                           <div className={`w-8 h-8 ${bg} rounded-full flex items-center justify-center`}>
                             <span className={`text-xs font-bold ${color}`}>{badge}</span>
                           </div>
-                          <span className="font-semibold text-gray-900 text-sm">{pair}</span>
+                          <span className="font-semibold text-gray-800 text-sm">{pair}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right font-semibold text-gray-900 text-sm">{spread}</td>
+                      <td className="px-6 py-4 text-right font-semibold text-gray-800 text-sm">{spread}</td>
                       <td className="px-6 py-4 text-right text-gray-500 text-sm">{leverage}</td>
                     </tr>
                   ))}
