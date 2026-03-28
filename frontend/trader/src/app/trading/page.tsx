@@ -90,6 +90,7 @@ export default function TradingPage() {
     setWatchlistWidth, setOrderPanelWidth, setBottomPanelHeight
   } = useUIStore();
 
+  const [wlW, setWlW] = useState(watchlistWidth);
   const [opW, setOpW] = useState(orderPanelWidth);
   const [bpH, setBpH] = useState(bottomPanelHeight);
   const [isMobile, setIsMobile] = useState(false);

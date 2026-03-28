@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTradingStore, InstrumentInfo } from '@/stores/tradingStore';
 import { clsx } from 'clsx';
 import MobileOrderSheet from '@/components/trading/MobileOrderSheet';
+
+type Trend = 'up' | 'down' | 'neutral';
 
 const SEGMENTS = ['All', 'Forex', 'Commodities', 'Indices', 'Crypto'];
 
@@ -77,7 +79,13 @@ function splitPip(priceStr: string): { prefix: string; large: string; pip: strin
   return { prefix: priceStr.slice(0, dotIdx + 1) + smallDec, large, pip };
 }
 
-import MobileOrderSheet from '@/components/trading/MobileOrderSheet';
+// Helper functions and mock data
+const sessionStats: Record<string, { open: number }> = {};
+
+function pointsDelta(current: number, open: number, digits: number): number {
+  const multiplier = Math.pow(10, digits - 1);
+  return Math.round((current - open) * multiplier);
+}
 
 export default function Watchlist() {
   const router = useRouter();
@@ -222,6 +230,7 @@ export default function Watchlist() {
             pctNum != null ? `${pctNum >= 0 ? '+' : ''}${pctNum.toFixed(2)}%` : '—%';
           const changePositive = pts != null && pts > 0;
           const changeNegative = pts != null && pts < 0;
+          const pip = Math.pow(10, -digits);
           const spreadPips = tick && pip > 0 ? Math.max(0, Math.round(tick.spread / pip)) : 0;
           const isSelected = selectedSymbol === symbol;
 

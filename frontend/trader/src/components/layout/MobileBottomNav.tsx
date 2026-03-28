@@ -87,7 +87,7 @@ export default function MobileBottomNav() {
   const [showMore, setShowMore] = useState(false);
 
   // Hide on auth and public landing/legal pages
-  const isPublicPage = pathname === '/' || pathname === '/privacy' || pathname === '/terms' || pathname === '/risk';
+  const isPublicPage = pathname === '/' || pathname === '/privacy' || pathname === '/terms' || pathname === '/risk' || pathname === '/about' || pathname === '/contact' || pathname === '/platforms' || pathname === '/white-label';
   if (pathname?.startsWith('/auth') || isPublicPage) return null;
 
   const handleLogout = () => {

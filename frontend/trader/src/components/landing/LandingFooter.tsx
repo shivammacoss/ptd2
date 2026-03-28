@@ -27,17 +27,26 @@ export default function LandingFooter() {
           <div>
             <p className="font-semibold text-gray-900 mb-4">Products</p>
             <ul className="space-y-2 text-sm text-gray-500">
+              <li><Link href="/platforms" className="hover:text-blue-600 transition-colors">Trading Platforms</Link></li>
+              <li><Link href="/white-label" className="hover:text-blue-600 transition-colors">White Label</Link></li>
               <li><Link href="/auth/register" className="hover:text-blue-600 transition-colors">Open Live Account</Link></li>
               <li><Link href="/auth/register" className="hover:text-blue-600 transition-colors">Demo Account</Link></li>
-              <li><Link href="/auth/login" className="hover:text-blue-600 transition-colors">Forex Trading</Link></li>
-              <li><Link href="/auth/login" className="hover:text-blue-600 transition-colors">Metals (XAU/USD)</Link></li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="font-semibold text-gray-900 mb-4">Company</p>
+            <ul className="space-y-2 text-sm text-gray-500">
+              <li><Link href="/about" className="hover:text-blue-600 transition-colors">About Us</Link></li>
+              <li><Link href="/contact" className="hover:text-blue-600 transition-colors">Contact</Link></li>
+              <li><Link href="/white-label" className="hover:text-blue-600 transition-colors">Partnerships</Link></li>
             </ul>
           </div>
 
           <div>
             <p className="font-semibold text-gray-900 mb-4">Support</p>
             <ul className="space-y-2 text-sm text-gray-500">
-              <li><Link href="/auth/login" className="hover:text-blue-600 transition-colors">Contact Support</Link></li>
+              <li><Link href="/contact" className="hover:text-blue-600 transition-colors">Contact Support</Link></li>
               <li className="flex items-center gap-2">
                 <Phone className="w-4 h-4 shrink-0" />
                 <span>+1 (908) 228-0305</span>
