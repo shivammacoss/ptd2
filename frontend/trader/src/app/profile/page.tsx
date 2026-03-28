@@ -42,13 +42,13 @@ interface Profile {
 
     id: string;
 
-    type: string;
+    document_type: string;
 
     status: string;
 
-    file_name: string;
+    rejection_reason: string | null;
 
-    uploaded_at: string;
+    created_at: string;
 
   }>;
 
@@ -129,6 +129,18 @@ export default function ProfilePage() {
   const [settingUp2Fa, setSettingUp2Fa] = useState(false);
 
   const [verifying2Fa, setVerifying2Fa] = useState(false);
+
+
+
+  // KYC upload form
+
+  const [kycDocType, setKycDocType] = useState('passport');
+
+  const [kycFile, setKycFile] = useState<File | null>(null);
+
+  const [kycSubmitting, setKycSubmitting] = useState(false);
+
+  const [showKycForm, setShowKycForm] = useState(false);
 
 
 
@@ -401,6 +413,58 @@ export default function ProfilePage() {
     } finally {
 
       setChangingPassword(false);
+
+    }
+
+  };
+
+
+
+  const handleSubmitKyc = async () => {
+
+    if (!kycFile) { toast.error('Please select a file'); return; }
+
+    const formData = new FormData();
+
+    formData.append('document_type', kycDocType);
+
+    formData.append('file', kycFile);
+
+    setKycSubmitting(true);
+
+    try {
+
+      const token = api.getToken();
+
+      const res = await fetch('/api/v1/profile/kyc/submit/', {
+
+        method: 'POST',
+
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+
+        body: formData,
+
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.detail || 'Upload failed');
+
+      toast.success(json.message || 'KYC submitted successfully!');
+
+      setKycFile(null);
+
+      setShowKycForm(false);
+
+      fetchProfile();
+
+    } catch (err: unknown) {
+
+      toast.error(err instanceof Error ? err.message : 'Failed to submit KYC');
+
+    } finally {
+
+      setKycSubmitting(false);
 
     }
 
@@ -880,71 +944,155 @@ export default function ProfilePage() {
 
 
 
-        {tab === 'kyc' && (
+        {tab === 'kyc' && (() => {
 
-          <div className="max-w-lg space-y-6">
+          const kycStatus = profile?.kyc_status ?? 'pending';
 
-            <Card variant="glass" padding="lg">
+          const isVerified = kycStatus === 'verified' || kycStatus === 'approved';
 
-              <div className="flex items-center justify-between mb-4">
+          const isUnderReview = kycStatus === 'under_review';
 
-                <h3 className="text-md font-semibold text-text-primary">KYC Verification</h3>
+          const isRejected = kycStatus === 'rejected';
 
-                <span className={clsx(
+          const canSubmit = !isVerified && !isUnderReview;
 
-                  'inline-flex items-center px-2 py-1 text-[10px] font-medium rounded-md',
-
-                  kycStatusStyle(profile?.kyc_status ?? ''),
-
-                )}>
-
-                  {profile?.kyc_status ?? 'unknown'}
-
-                </span>
-
-              </div>
+          const showForm = showKycForm || (canSubmit && kycDocs.length === 0);
 
 
 
-              <div className="space-y-4">
+          return (
 
-                {kycDocs.length === 0 ? (
+            <div className="max-w-lg space-y-6">
 
-                  <div className="text-center py-6 text-sm text-text-tertiary">
 
-                    <p className="mb-2">No documents uploaded yet</p>
 
-                    <p className="text-xs text-text-tertiary mb-1">Contact support to verify your documents.</p>
+              {/* Status banner */}
+
+              <Card variant="glass" padding="lg">
+
+                <div className="flex items-center justify-between mb-1">
+
+                  <h3 className="text-md font-semibold text-text-primary">KYC Verification</h3>
+
+                  <span className={clsx(
+
+                    'inline-flex items-center px-2.5 py-1 text-[10px] font-semibold rounded-md uppercase tracking-wider',
+
+                    kycStatusStyle(kycStatus),
+
+                  )}>
+
+                    {kycStatus.replace(/_/g, ' ')}
+
+                  </span>
+
+                </div>
+
+
+
+                {isVerified && (
+
+                  <p className="text-xs text-buy mt-2">✓ Your identity has been verified. You have full access to all platform features.</p>
+
+                )}
+
+
+
+                {isUnderReview && (
+
+                  <p className="text-xs text-warning mt-2">Your documents are under review. We'll notify you within 1–2 business days.</p>
+
+                )}
+
+
+
+                {isRejected && (
+
+                  <div className="mt-3 rounded-lg border border-sell/20 bg-sell/5 px-3 py-2">
+
+                    <p className="text-xs font-semibold text-sell">Application Rejected</p>
+
+                    {kycDocs.find(d => d.status === 'rejected')?.rejection_reason && (
+
+                      <p className="text-xs text-sell/80 mt-0.5">
+
+                        Reason: {kycDocs.find(d => d.status === 'rejected')?.rejection_reason}
+
+                      </p>
+
+                    )}
+
+                    {!showForm && (
+
+                      <button
+
+                        onClick={() => setShowKycForm(true)}
+
+                        className="mt-2 text-xs font-semibold text-white bg-sell/80 hover:bg-sell px-3 py-1.5 rounded-lg transition-all"
+
+                      >
+
+                        Reapply Now →
+
+                      </button>
+
+                    )}
 
                   </div>
 
-                ) : (
+                )}
 
-                  kycDocs.map((doc) => (
 
-                    <div key={doc.id} className="glass-card rounded-lg p-4 flex items-center justify-between">
 
-                      <div>
+                {kycDocs.length === 0 && !isVerified && !isUnderReview && (
 
-                        <div className="text-sm font-medium text-text-primary capitalize">
+                  <p className="text-xs text-text-tertiary mt-2">Please upload a government-issued ID to verify your account and unlock full trading features.</p>
 
-                          {doc.type?.replace(/_/g, ' ')}
+                )}
+
+              </Card>
+
+
+
+              {/* Previous documents */}
+
+              {kycDocs.length > 0 && (
+
+                <Card variant="glass" padding="lg">
+
+                  <h4 className="text-sm font-semibold text-text-primary mb-3">Submitted Documents</h4>
+
+                  <div className="space-y-3">
+
+                    {kycDocs.map((doc) => (
+
+                      <div key={doc.id} className="glass-card rounded-lg p-3 flex items-start justify-between gap-3">
+
+                        <div className="min-w-0">
+
+                          <div className="text-sm font-medium text-text-primary capitalize">
+
+                            {doc.document_type?.replace(/_/g, ' ')}
+
+                          </div>
+
+                          <div className="text-xs text-text-tertiary mt-0.5">
+
+                            {new Date(doc.created_at).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+
+                          </div>
+
+                          {doc.status === 'rejected' && doc.rejection_reason && (
+
+                            <div className="text-xs text-sell mt-1">↳ {doc.rejection_reason}</div>
+
+                          )}
 
                         </div>
-
-                        <div className="text-xs text-text-tertiary mt-0.5">
-
-                          {doc.file_name} • {new Date(doc.uploaded_at).toLocaleDateString()}
-
-                        </div>
-
-                      </div>
-
-                      <div className="flex items-center gap-3">
 
                         <span className={clsx(
 
-                          'inline-flex items-center px-2 py-1 text-[10px] font-medium rounded-md',
+                          'shrink-0 inline-flex items-center px-2 py-0.5 text-[10px] font-semibold rounded-md uppercase',
 
                           kycStatusStyle(doc.status),
 
@@ -954,35 +1102,166 @@ export default function ProfilePage() {
 
                         </span>
 
-                        {doc.status !== 'verified' && doc.status !== 'approved' && (
-
-                          <span className="text-[10px] text-text-tertiary">Contact support to re-submit</span>
-
-                        )}
-
                       </div>
+
+                    ))}
+
+                  </div>
+
+                </Card>
+
+              )}
+
+
+
+              {/* Upload form */}
+
+              {showForm && (
+
+                <Card variant="glass" padding="lg">
+
+                  <h4 className="text-sm font-semibold text-text-primary mb-4">
+
+                    {isRejected ? 'Resubmit Document' : 'Upload Identity Document'}
+
+                  </h4>
+
+
+
+                  <div className="space-y-4">
+
+                    <div>
+
+                      <label className="text-xs text-text-secondary block mb-1.5 font-medium">Document Type</label>
+
+                      <select
+
+                        value={kycDocType}
+
+                        onChange={(e) => setKycDocType(e.target.value)}
+
+                        className="skeu-input w-full text-text-primary rounded-xl py-3 px-4 text-sm"
+
+                      >
+
+                        <option value="passport">Passport</option>
+
+                        <option value="national_id">National ID Card</option>
+
+                        <option value="driving_license">Driving License</option>
+
+                        <option value="proof_of_address">Proof of Address</option>
+
+                        <option value="selfie">Selfie with ID</option>
+
+                        <option value="bank_statement">Bank Statement</option>
+
+                      </select>
 
                     </div>
 
-                  ))
-
-                )}
 
 
+                    <div>
 
-                {kycDocs.length > 0 && (
+                      <label className="text-xs text-text-secondary block mb-1.5 font-medium">File (JPG, PNG, PDF, WEBP — max 10 MB)</label>
 
-                  <p className="text-xs text-text-tertiary">Need to upload more documents? Contact support for assistance.</p>
+                      <label className={clsx(
 
-                )}
+                        'flex flex-col items-center justify-center w-full py-8 rounded-xl border-2 border-dashed cursor-pointer transition-all',
 
-              </div>
+                        kycFile ? 'border-buy/40 bg-buy/5' : 'border-border-glass hover:border-buy/30 hover:bg-buy/5',
 
-            </Card>
+                      )}>
 
-          </div>
+                        <input
 
-        )}
+                          type="file"
+
+                          accept=".jpg,.jpeg,.png,.pdf,.webp"
+
+                          className="hidden"
+
+                          onChange={(e) => setKycFile(e.target.files?.[0] ?? null)}
+
+                        />
+
+                        {kycFile ? (
+
+                          <>
+
+                            <div className="text-2xl mb-1">📄</div>
+
+                            <div className="text-sm font-medium text-buy">{kycFile.name}</div>
+
+                            <div className="text-xs text-text-tertiary mt-0.5">{(kycFile.size / 1024).toFixed(0)} KB</div>
+
+                          </>
+
+                        ) : (
+
+                          <>
+
+                            <div className="text-2xl mb-1">☁️</div>
+
+                            <div className="text-sm text-text-secondary">Click to browse file</div>
+
+                            <div className="text-xs text-text-tertiary mt-0.5">JPG, PNG, PDF, WEBP up to 10 MB</div>
+
+                          </>
+
+                        )}
+
+                      </label>
+
+                    </div>
+
+
+
+                    <div className="flex gap-2">
+
+                      {isRejected && (
+
+                        <Button variant="ghost" size="sm" onClick={() => { setShowKycForm(false); setKycFile(null); }}>
+
+                          Cancel
+
+                        </Button>
+
+                      )}
+
+                      <Button
+
+                        variant="primary"
+
+                        onClick={handleSubmitKyc}
+
+                        loading={kycSubmitting}
+
+                        className="flex-1"
+
+                      >
+
+                        {kycSubmitting ? 'Uploading…' : 'Submit for Review'}
+
+                      </Button>
+
+                    </div>
+
+                  </div>
+
+                </Card>
+
+              )}
+
+            </div>
+
+          );
+
+
+
+
+        })()}
 
 
 
