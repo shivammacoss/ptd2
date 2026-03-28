@@ -628,17 +628,18 @@ export default function PortfolioPage() {
 
                 ) : (
 
-                  monthlies.map((m) => (
-
+                  monthlies.map((m) => {
+                    const pnl = Number(m.pnl) || 0;
+                    return (
                     <div
 
                       key={m.month}
 
                       className={clsx(
 
-                        'rounded-lg p-3 text-center border glass-light',
+                        'rounded-lg p-3 text-center border',
 
-                        m.pnl >= 0 ? 'border-buy/20' : 'border-sell/20',
+                        pnl >= 0 ? 'border-buy/20 bg-buy/5' : 'border-sell/20 bg-sell/5',
 
                       )}
 
@@ -646,15 +647,15 @@ export default function PortfolioPage() {
 
                       <div className="text-[10px] text-text-tertiary mb-1">{m.month}</div>
 
-                      <div className={clsx('text-sm font-mono font-semibold tabular-nums', m.pnl >= 0 ? 'text-buy' : 'text-sell')}>
+                      <div className={clsx('text-sm font-mono font-semibold tabular-nums', pnl >= 0 ? 'text-buy' : 'text-sell')}>
 
-                        {m.pnl >= 0 ? '+' : ''}{m.pnl.toFixed(0)}
+                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(0)}
 
                       </div>
 
                     </div>
-
-                  ))
+                    );
+                  })
 
                 )}
 
@@ -676,8 +677,9 @@ export default function PortfolioPage() {
 
                 <div className="p-4 space-y-2">
 
-                  {performance.symbol_breakdown.map((s) => (
-
+                  {performance.symbol_breakdown.map((s) => {
+                    const sPnl = Number(s.pnl) || 0;
+                    return (
                     <div key={s.symbol} className="flex items-center justify-between py-2 border-b border-border-glass/50">
 
                       <div>
@@ -688,15 +690,15 @@ export default function PortfolioPage() {
 
                       </div>
 
-                      <span className={clsx('text-sm font-mono font-semibold tabular-nums', s.pnl >= 0 ? 'text-buy' : 'text-sell')}>
+                      <span className={clsx('text-sm font-mono font-semibold tabular-nums', sPnl >= 0 ? 'text-buy' : 'text-sell')}>
 
-                        {s.pnl >= 0 ? '+' : ''}{fmt(s.pnl)}
+                        {sPnl >= 0 ? '+' : ''}{fmt(sPnl)}
 
                       </span>
 
                     </div>
-
-                  ))}
+                    );
+                  })}
 
                 </div>
 
