@@ -18,6 +18,9 @@ import {
   History,
   CreditCard,
   RefreshCcw,
+  X,
+  Banknote,
+  Bitcoin,
 } from 'lucide-react';
 
 interface Transaction {
@@ -29,6 +32,13 @@ interface Transaction {
   method: string;
   created_at: string;
   tx_hash?: string;
+}
+
+interface AccountItem {
+  id: string;
+  currency?: string;
+  is_demo?: boolean;
+  balance?: number;
 }
 
 interface WalletData {
@@ -109,6 +119,14 @@ function mergeWalletHistory(
 
 const RECENT_LIMIT = 8;
 
+const DEPOSIT_METHODS = [
+  { value: 'bank_transfer', label: 'Bank Transfer', icon: Banknote },
+  { value: 'card', label: 'Credit / Debit Card', icon: CreditCard },
+  { value: 'crypto_usdt', label: 'Crypto — USDT', icon: Bitcoin },
+  { value: 'crypto_btc', label: 'Crypto — BTC', icon: Bitcoin },
+  { value: 'crypto_eth', label: 'Crypto — ETH', icon: Bitcoin },
+];
+
 export default function WalletPage() {
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -116,8 +134,15 @@ export default function WalletPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [showAllTx, setShowAllTx] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [accountId, setAccountId] = useState<string | null>(null);
   const loadGen = useRef(0);
   const fundingRef = useRef<HTMLDivElement>(null);
+
+  const [showDepositModal, setShowDepositModal] = useState(false);
+  const [depositMethod, setDepositMethod] = useState('bank_transfer');
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositTxId, setDepositTxId] = useState('');
+  const [depositSubmitting, setDepositSubmitting] = useState(false);
 
   const fetchData = useCallback(async (isRefresh = false) => {
     const id = ++loadGen.current;
@@ -141,9 +166,10 @@ export default function WalletPage() {
       let totalWithdrawn = 0;
 
       if (accountsRes.status === 'fulfilled') {
-        const items = accountsRes.value?.items || [];
+        const items = (accountsRes.value?.items || []) as AccountItem[];
         const live = items.find((a) => a.is_demo === false) || items[0];
         if (live?.currency) currency = live.currency;
+        if (live?.id) setAccountId(live.id);
       }
 
       if (summaryRes.status === 'fulfilled' && summaryRes.value) {
@@ -223,8 +249,34 @@ export default function WalletPage() {
 
   const visibleTx = showAllTx ? transactions : transactions.slice(0, RECENT_LIMIT);
 
-  const scrollToFunding = () => {
-    fundingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const openDepositModal = () => {
+    setDepositAmount('');
+    setDepositTxId('');
+    setDepositMethod('bank_transfer');
+    setShowDepositModal(true);
+  };
+
+  const submitDeposit = async () => {
+    const amt = parseFloat(depositAmount);
+    if (!amt || amt <= 0) { toast.error('Enter a valid amount'); return; }
+    if (!accountId) { toast.error('Account not found'); return; }
+    setDepositSubmitting(true);
+    try {
+      await api.post('/wallet/deposit', {
+        account_id: accountId,
+        amount: amt,
+        method: depositMethod,
+        transaction_id: depositTxId || undefined,
+      });
+      toast.success(`Deposit of $${amt.toLocaleString()} submitted — pending approval`);
+      setShowDepositModal(false);
+      void fetchData(true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Deposit failed';
+      toast.error(msg);
+    } finally {
+      setDepositSubmitting(false);
+    }
   };
 
   if (loading) {
@@ -296,7 +348,7 @@ export default function WalletPage() {
               <div className="flex gap-2 sm:gap-3">
                 <Button
                   type="button"
-                  onClick={scrollToFunding}
+                  onClick={openDepositModal}
                   className="flex-1 md:flex-none h-11 md:h-12 px-5 md:px-8 bg-white text-[#2563EB] hover:bg-white/90 font-bold rounded-xl gap-2 shadow-xl shadow-black/10 active:scale-95 transition-transform"
                 >
                   <Plus className="w-4 h-4 md:w-5 md:h-5" /> Deposit
@@ -304,7 +356,7 @@ export default function WalletPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={scrollToFunding}
+                  onClick={() => fundingRef.current?.scrollIntoView({ behavior: 'smooth' })}
                   className="flex-1 md:flex-none h-11 md:h-12 px-5 md:px-8 border-white/20 text-white hover:bg-white/10 font-bold rounded-xl gap-2 active:scale-95 transition-transform backdrop-blur-sm"
                 >
                   <Minus className="w-4 h-4 md:w-5 md:h-5" /> Withdraw
@@ -344,7 +396,7 @@ export default function WalletPage() {
           >
             <button
               type="button"
-              onClick={() => toast.success('Submit a deposit from the app or contact support for card deposits.')}
+              onClick={() => { setDepositMethod('card'); openDepositModal(); }}
               className="glass-card p-4 flex items-center gap-4 text-left transition-all border-border-glass/30 hover:border-buy/20 hover:bg-bg-hover group active:scale-[0.98]"
             >
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-buy/10 flex items-center justify-center text-buy group-hover:scale-110 transition-transform">
@@ -361,7 +413,7 @@ export default function WalletPage() {
 
             <button
               type="button"
-              onClick={() => toast.success('Crypto deposits: use USDT / BTC / ETH — details from your broker.')}
+              onClick={() => { setDepositMethod('crypto_usdt'); openDepositModal(); }}
               className="glass-card p-4 flex items-center gap-4 text-left transition-all border-border-glass/30 hover:border-[#F6AD55]/20 hover:bg-bg-hover group active:scale-[0.98]"
             >
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-[#F6AD55]/10 flex items-center justify-center text-[#F6AD55] group-hover:scale-110 transition-transform">
@@ -492,6 +544,106 @@ export default function WalletPage() {
           </div>
         </div>
       </div>
+
+      {/* Deposit Modal */}
+      {showDepositModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowDepositModal(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative w-full sm:max-w-md bg-bg-primary border border-border-primary rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-text-primary">Make a Deposit</h2>
+              <button type="button" onClick={() => setShowDepositModal(false)} className="p-1.5 rounded-lg hover:bg-bg-hover transition-colors">
+                <X className="w-5 h-5 text-text-secondary" />
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Amount (USD)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary font-bold">$</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full pl-7 pr-4 py-3 rounded-xl border border-border-primary bg-bg-secondary text-text-primary placeholder:text-text-tertiary outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 text-lg font-mono font-bold"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                {[100, 500, 1000, 5000].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => setDepositAmount(String(amt))}
+                    className="flex-1 py-1 text-xs font-semibold rounded-lg border border-border-primary bg-bg-secondary text-text-secondary hover:border-blue-500 hover:text-blue-500 transition-colors"
+                  >
+                    ${amt >= 1000 ? `${amt / 1000}k` : amt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Payment Method</label>
+              <div className="grid grid-cols-1 gap-2">
+                {DEPOSIT_METHODS.map(({ value, label, icon: Icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setDepositMethod(value)}
+                    className={clsx(
+                      'flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all',
+                      depositMethod === value
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-500'
+                        : 'border-border-primary bg-bg-secondary text-text-primary hover:border-blue-500/40',
+                    )}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span className="text-sm font-semibold">{label}</span>
+                    {depositMethod === value && <span className="ml-auto w-2 h-2 rounded-full bg-blue-500" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                {depositMethod.startsWith('crypto') ? 'TX Hash (optional)' : 'Transaction / Reference ID (optional)'}
+              </label>
+              <input
+                type="text"
+                value={depositTxId}
+                onChange={(e) => setDepositTxId(e.target.value)}
+                placeholder={depositMethod.startsWith('crypto') ? '0x...' : 'REF123456'}
+                className="w-full px-4 py-3 rounded-xl border border-border-primary bg-bg-secondary text-text-primary placeholder:text-text-tertiary outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 font-mono text-sm"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void submitDeposit()}
+              disabled={depositSubmitting || !depositAmount}
+              className={clsx(
+                'w-full py-3.5 rounded-xl font-bold text-base transition-all active:scale-[0.98]',
+                depositSubmitting || !depositAmount
+                  ? 'bg-bg-secondary text-text-tertiary cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20',
+              )}
+            >
+              {depositSubmitting ? 'Submitting…' : `Submit Deposit${depositAmount ? ` — $${parseFloat(depositAmount || '0').toLocaleString()}` : ''}`}
+            </button>
+
+            <p className="text-center text-[11px] text-text-tertiary">
+              Deposits are reviewed and typically approved within 24 hours.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
