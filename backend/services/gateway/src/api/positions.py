@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.common.src.database import get_db
 from packages.common.src.models import (
-    Position, PositionStatus, TradingAccount, TradeHistory, Transaction, OrderSide
+    Position, PositionStatus, TradingAccount, TradeHistory, Transaction, OrderSide, CopyTrade
 )
 from packages.common.src.schemas import (
     PositionResponse, ClosePositionRequest, ModifyPositionRequest
@@ -83,6 +83,13 @@ async def list_positions(
             current_price = float(tick["bid"]) if sv == "buy" else float(tick["ask"])
             profit = float(_calc_pnl(pos.side, pos.open_price, Decimal(str(current_price)), pos.lots, contract_size))
 
+        # Check if this is a copy trade
+        copy_trade_q = await db.execute(
+            select(CopyTrade).where(CopyTrade.investor_position_id == pos.id)
+        )
+        copy_trade = copy_trade_q.scalar_one_or_none()
+        trade_type = "copy_trade" if copy_trade else "self_trade"
+
         pos_status_val = pos.status.value if hasattr(pos.status, 'value') else str(pos.status)
         response.append({
             "id": str(pos.id),
@@ -99,6 +106,7 @@ async def list_positions(
             "profit": profit,
             "status": pos_status_val,
             "contract_size": float(contract_size),
+            "trade_type": trade_type,
             "created_at": pos.created_at.isoformat() if pos.created_at else None,
             "closed_at": pos.closed_at.isoformat() if getattr(pos, 'closed_at', None) else None,
         })

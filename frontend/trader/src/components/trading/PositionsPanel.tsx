@@ -20,6 +20,7 @@ interface ClosedTrade {
   swap: number;
   close_time: string;
   close_reason?: string;
+  trade_type?: string;
 }
 
 type CloseModal = { id: string; symbol: string; side: string; lots: number; closeLots: string } | null;
@@ -398,6 +399,7 @@ export default function PositionsPanel() {
                       <tr className="border-b border-border-glass/50">
                         <th className={th}>Account</th>
                         <th className={th}>Symbol</th>
+                        <th className={th}>Type</th>
                         <th className={th}>Side</th>
                         <th className={th}>Qty</th>
                         <th className={th}>Open</th>
@@ -418,6 +420,11 @@ export default function PositionsPanel() {
                           >
                             <td className={td}>{accountLabel(pos.account_id)}</td>
                             <td className={clsx(td, 'font-bold')}>{pos.symbol}</td>
+                            <td className={td}>
+                              <span className={clsx('text-[10px] px-1.5 py-0.5 rounded-sm font-medium', pos.trade_type === 'copy_trade' ? 'bg-info/15 text-info' : 'bg-success/15 text-success')}>
+                                {pos.trade_type === 'copy_trade' ? 'Copy' : 'Self'}
+                              </span>
+                            </td>
                             <td className={td}>
                               <span
                                 className={clsx(
@@ -521,7 +528,7 @@ export default function PositionsPanel() {
                       })}
                       {positions.length === 0 && (
                         <tr>
-                          <td colSpan={9} className="px-4 py-12 text-center text-sm text-text-tertiary">
+                          <td colSpan={10} className="px-4 py-12 text-center text-sm text-text-tertiary">
                             No open positions
                           </td>
                         </tr>
@@ -622,6 +629,7 @@ export default function PositionsPanel() {
                     <thead>
                       <tr className="border-b border-border-glass/50">
                         <th className={th}>Symbol</th>
+                        <th className={th}>Type</th>
                         <th className={th}>Side</th>
                         <th className={th}>Qty</th>
                         <th className={th}>Open</th>
@@ -640,6 +648,11 @@ export default function PositionsPanel() {
                             className="border-b border-border-glass/30 hover:bg-bg-hover/25 transition-colors"
                           >
                             <td className={clsx(td, 'font-bold')}>{trade.symbol}</td>
+                            <td className={td}>
+                              <span className={clsx('text-[10px] px-1.5 py-0.5 rounded-sm font-medium', trade.trade_type === 'copy_trade' ? 'bg-info/15 text-info' : 'bg-success/15 text-success')}>
+                                {trade.trade_type === 'copy_trade' ? 'Copy' : 'Self'}
+                              </span>
+                            </td>
                             <td className={td}>
                               <span
                                 className={clsx(
@@ -664,7 +677,7 @@ export default function PositionsPanel() {
                       })}
                       {historyTrades.length === 0 && (
                         <tr>
-                          <td colSpan={7} className="px-4 py-12 text-center text-sm text-text-tertiary">
+                          <td colSpan={8} className="px-4 py-12 text-center text-sm text-text-tertiary">
                             No trade history
                           </td>
                         </tr>

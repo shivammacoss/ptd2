@@ -140,8 +140,14 @@ async def create_withdrawal(
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    if account.balance < req.amount:
-        raise HTTPException(status_code=400, detail="Insufficient balance")
+    # Calculate free margin (available balance excluding margin locked in trades)
+    free_margin = account.balance - (account.margin_used or Decimal("0"))
+    
+    if free_margin < req.amount:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Insufficient free balance. Available: ${float(free_margin):.2f} (${float(account.margin_used or 0):.2f} locked in open trades)"
+        )
 
     withdrawal = Withdrawal(
         user_id=current_user["user_id"],
@@ -333,6 +339,8 @@ async def wallet_summary(
         "balance": float(account.balance or 0),
         "credit": float(account.credit or 0),
         "equity": float(account.equity or 0),
+        "margin_used": float(account.margin_used or 0),
+        "free_margin": float((account.balance or 0) - (account.margin_used or 0)),
         "total_deposited": total_dep + total_adj_in,
         "total_withdrawn": total_wd + total_adj_out,
     }

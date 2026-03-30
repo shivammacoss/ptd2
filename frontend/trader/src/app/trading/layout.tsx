@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useTradingStore } from '@/stores/tradingStore';
 import { wsManager } from '@/lib/ws/wsManager';
+import { extractTicksFromPayload } from '@/lib/ws/normalizePricePayload';
 import api from '@/lib/api/client';
 import toast from 'react-hot-toast';
 import { sounds, unlockAudio } from '@/lib/sounds';
@@ -116,45 +117,23 @@ export default function TradingLayout({ children }: { children: React.ReactNode 
 
     wsManager.connect();
     const unsub = wsManager.onMessage((data) => {
-      if (data.symbol && data.bid != null && data.ask != null) {
-        updatePrice({
-          symbol: data.symbol,
-          bid: parseFloat(data.bid),
-          ask: parseFloat(data.ask),
-          timestamp: data.timestamp || data.ts || new Date().toISOString(),
-          spread: parseFloat(data.ask) - parseFloat(data.bid),
-        });
-      }
+      const ticks = extractTicksFromPayload(data);
+      for (const t of ticks) updatePrice(t);
     });
 
     // REST fallback when WebSocket cannot connect (e.g. HTTPS site without /ws proxy to gateway).
     let pollCancelled = false;
     const pollPricesFromApi = async () => {
       try {
-        const rows = await api.get<
-          { symbol?: string; bid?: number; ask?: number; timestamp?: string; spread?: number }[]
-        >('/instruments/prices/all', undefined, { timeoutMs: 15000 });
-        if (pollCancelled || !Array.isArray(rows)) return;
-        for (const row of rows) {
-          const sym = row?.symbol;
-          if (!sym || row.bid == null || row.ask == null) continue;
-          const bid = Number(row.bid);
-          const ask = Number(row.ask);
-          if (Number.isNaN(bid) || Number.isNaN(ask)) continue;
-          updatePrice({
-            symbol: sym,
-            bid,
-            ask,
-            timestamp: row.timestamp || new Date().toISOString(),
-            spread: row.spread != null ? Number(row.spread) : ask - bid,
-          });
-        }
+        const raw = await api.get<unknown>('/instruments/prices/all', undefined, { timeoutMs: 15000 });
+        if (pollCancelled) return;
+        for (const t of extractTicksFromPayload(raw)) updatePrice(t);
       } catch {
         /* ignore — WS may still work; market-data may be down */
       }
     };
     pollPricesFromApi();
-    const pricePoll = setInterval(pollPricesFromApi, 2500);
+    const pricePoll = setInterval(pollPricesFromApi, 1500);
 
     let prevPositionIds: Set<string> = new Set();
 

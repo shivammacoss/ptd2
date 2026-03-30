@@ -19,7 +19,7 @@ from packages.common.src.models import TradingAccount
 from .api import (
     auth, orders, positions, accounts, instruments, deposits,
     websocket_manager, social, business, portfolio, profile, support,
-    notifications, banners, trading_catalog,
+    notifications, banners, trading_catalog, followers,
 )
 from .engines.sltp_engine import sltp_engine
 from .engines.copy_engine import copy_engine
@@ -72,6 +72,7 @@ app.include_router(profile.router, prefix="/api/v1/profile", tags=["Profile"])
 app.include_router(support.router, prefix="/api/v1/support", tags=["Support"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["Notifications"])
 app.include_router(banners.router, prefix="/api/v1/banners", tags=["Banners"])
+app.include_router(followers.router, prefix="/api/v1/followers", tags=["Followers"])
 
 
 @app.get("/health")

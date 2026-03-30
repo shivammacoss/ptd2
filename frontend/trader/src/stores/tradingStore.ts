@@ -147,6 +147,9 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
           swap: Number(p.swap) || 0,
           commission: Number(p.commission) || 0,
           profit: Number(p.profit) || 0,
+          status: p.status || 'open',
+          contract_size: Number(p.contract_size) || 100000,
+          trade_type: p.trade_type,
           created_at: p.created_at,
         })),
       });
@@ -177,16 +180,22 @@ export const useTradingStore = create<TradingState>()((set, get) => ({
   },
 
   updatePrice: (tick) => set((state) => {
-    const prev = state.prices[tick.symbol];
+    const sym = String(tick.symbol || '').trim().toUpperCase();
+    if (!sym) return state;
+    const normalized: TickData = { ...tick, symbol: sym };
+    const prev = state.prices[sym];
     return {
       prevPrices: prev
-        ? { ...state.prevPrices, [tick.symbol]: prev.bid }
+        ? { ...state.prevPrices, [sym]: prev.bid }
         : state.prevPrices,
-      prices: { ...state.prices, [tick.symbol]: tick },
+      prices: { ...state.prices, [sym]: normalized },
       positions: state.positions.map((pos) => {
-        if (pos.symbol !== tick.symbol) return pos;
-        const cp = pos.side === 'buy' ? tick.bid : tick.ask;
-        const inst = state.instruments.find((i) => i.symbol === tick.symbol);
+        const pSym = String(pos.symbol || '').trim().toUpperCase();
+        if (pSym !== sym) return pos;
+        const cp = pos.side === 'buy' ? normalized.bid : normalized.ask;
+        const inst =
+          state.instruments.find((i) => i.symbol === sym) ||
+          state.instruments.find((i) => String(i.symbol).toUpperCase() === sym);
         const cs = inst?.contract_size || 100000;
         const pnl = pos.side === 'buy'
           ? (cp - pos.open_price) * pos.lots * cs

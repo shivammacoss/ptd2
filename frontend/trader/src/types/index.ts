@@ -120,6 +120,25 @@ export interface OpenTrade {
   created_at: string;
 }
 
+export interface Position {
+  id: string;
+  account_id: string;
+  symbol: string;
+  side: TradeDirection;
+  lots: number;
+  open_price: number;
+  current_price?: number;
+  stop_loss?: number;
+  take_profit?: number;
+  swap: number;
+  commission: number;
+  profit: number;
+  status: string;
+  contract_size: number;
+  trade_type?: string;
+  created_at: string;
+}
+
 export interface ClosedTrade {
   id: string;
   account_id: string;
