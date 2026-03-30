@@ -23,6 +23,9 @@ export interface Position {
   swap: number;
   commission: number;
   profit: number;
+  status?: string;
+  contract_size?: number;
+  trade_type?: string;
   created_at: string;
 }
 
