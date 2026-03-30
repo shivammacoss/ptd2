@@ -116,6 +116,11 @@ export default function WalletPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [showAllTx, setShowAllTx] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [withdrawMethod, setWithdrawMethod] = useState('bank_transfer');
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const loadGen = useRef(0);
   const fundingRef = useRef<HTMLDivElement>(null);
 
@@ -130,7 +135,7 @@ export default function WalletPage() {
         api.get<WalletSummaryResponse>('/wallet/summary'),
         api.get<{ items?: WalletListItem[] }>('/wallet/deposits'),
         api.get<{ items?: WalletListItem[] }>('/wallet/withdrawals'),
-        api.get<{ items?: Array<{ currency?: string; is_demo?: boolean; balance?: number }> }>('/accounts'),
+        api.get<{ items?: Array<{ id?: string; currency?: string; is_demo?: boolean; balance?: number; margin_used?: number }> }>('/accounts'),
       ]);
 
       if (id !== loadGen.current) return;
@@ -142,8 +147,9 @@ export default function WalletPage() {
 
       if (accountsRes.status === 'fulfilled') {
         const items = accountsRes.value?.items || [];
+        setAccounts(items.filter((a) => !a.is_demo));
         const live = items.find((a) => a.is_demo === false) || items[0];
-        if (live?.currency) currency = live.currency;
+        currency = live?.currency || 'USD';
       }
 
       if (summaryRes.status === 'fulfilled' && summaryRes.value) {
@@ -227,6 +233,37 @@ export default function WalletPage() {
     fundingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  const handleWithdraw = async () => {
+    if (!withdrawAmount || parseFloat(withdrawAmount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    const liveAccount = accounts.find((a) => !a.is_demo);
+    if (!liveAccount) {
+      toast.error('No live account found');
+      return;
+    }
+
+    setWithdrawing(true);
+    try {
+      await api.post('/wallet/withdraw', {
+        account_id: liveAccount.id,
+        amount: parseFloat(withdrawAmount),
+        method: withdrawMethod,
+      });
+      
+      toast.success('Withdrawal request submitted successfully!');
+      setShowWithdrawModal(false);
+      setWithdrawAmount('');
+      void fetchData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to submit withdrawal');
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col h-[100dvh] pb-16 md:h-screen md:pb-0 bg-bg-primary">
@@ -304,7 +341,7 @@ export default function WalletPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={scrollToFunding}
+                  onClick={() => setShowWithdrawModal(true)}
                   className="flex-1 md:flex-none h-11 md:h-12 px-5 md:px-8 border-white/20 text-white hover:bg-white/10 font-bold rounded-xl gap-2 active:scale-95 transition-transform backdrop-blur-sm"
                 >
                   <Minus className="w-4 h-4 md:w-5 md:h-5" /> Withdraw
@@ -492,6 +529,66 @@ export default function WalletPage() {
           </div>
         </div>
       </div>
+
+      {/* Withdrawal Modal */}
+      {showWithdrawModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowWithdrawModal(false)}>
+          <div className="w-full max-w-md bg-bg-secondary border border-border-glass rounded-2xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border-glass bg-bg-tertiary/50">
+              <h3 className="text-lg font-bold text-text-primary">Withdraw Funds</h3>
+              <button onClick={() => setShowWithdrawModal(false)} className="p-2 rounded-lg hover:bg-bg-hover transition-colors">
+                <svg className="w-5 h-5 text-text-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">Amount</label>
+                <input
+                  type="number"
+                  value={withdrawAmount}
+                  onChange={(e) => setWithdrawAmount(e.target.value)}
+                  placeholder="Enter amount"
+                  className="w-full px-4 py-3 bg-bg-tertiary border border-border-glass rounded-xl text-text-primary focus:outline-none focus:ring-2 focus:ring-buy/50"
+                />
+                <p className="text-xs text-text-tertiary mt-1">Available: {fmt(wallet?.balance || 0)}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">Withdrawal Method</label>
+                <select
+                  value={withdrawMethod}
+                  onChange={(e) => setWithdrawMethod(e.target.value)}
+                  className="w-full px-4 py-3 bg-bg-tertiary border border-border-glass rounded-xl text-text-primary focus:outline-none focus:ring-2 focus:ring-buy/50"
+                >
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="crypto_usdt">USDT (Crypto)</option>
+                  <option value="crypto_btc">Bitcoin</option>
+                  <option value="crypto_eth">Ethereum</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowWithdrawModal(false)}
+                  className="flex-1 px-4 py-3 rounded-xl border border-border-glass text-text-secondary hover:bg-bg-hover transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleWithdraw}
+                  disabled={withdrawing}
+                  className="flex-1 px-4 py-3 rounded-xl bg-buy text-white font-semibold hover:bg-buy/90 disabled:opacity-50 transition-colors"
+                >
+                  {withdrawing ? 'Processing...' : 'Submit Request'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
