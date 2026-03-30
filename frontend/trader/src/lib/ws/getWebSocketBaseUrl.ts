@@ -1,28 +1,70 @@
 /**
  * Origin for WebSockets (scheme + host[:port], no path).
  *
- * - Set NEXT_PUBLIC_WS_URL in production (must be wss:// when the site is HTTPS).
- * - If unset on an HTTPS page, uses wss + current host (your reverse proxy must forward /ws/* to the gateway).
- * - If unset on HTTP (typical local dev), uses ws://localhost:8000 so the browser talks to the gateway directly.
+ * Production often uses:
+ * - Site: https://protrader.today
+ * - API:  https://api.protrader.today/api/v1
+ * WebSocket must hit the **gateway** host (e.g. wss://api.protrader.today), not the marketing site host.
  */
+
+function apiUrlToWsOrigin(apiUrl: string): string | null {
+  const t = apiUrl.trim();
+  if (!t) return null;
+  try {
+    const u = new URL(t.includes('://') ? t : `https://${t}`);
+    if (!u.host) return null;
+    if (u.protocol === 'https:' || u.protocol === 'http:') {
+      const wsProto = u.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${wsProto}//${u.host}`;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 export function getWebSocketBaseUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_WS_URL?.trim();
+  const rawWs = process.env.NEXT_PUBLIC_WS_URL?.trim();
+  const rawApi = process.env.NEXT_PUBLIC_API_URL?.trim();
   const pageIsHttps =
     typeof window !== 'undefined' && window.location.protocol === 'https:';
 
-  if (raw) {
-    const withScheme = raw.includes('://') ? raw : `ws://${raw}`;
+  if (rawWs) {
+    const withScheme = rawWs.includes('://') ? rawWs : `wss://${rawWs}`;
     try {
       const u = new URL(withScheme);
-      // ws:// or http:// from env on an HTTPS site → mixed content / broken; use same host wss.
+      // HTTPS page + ws/http in env → upgrade to wss on **the URL’s host** (not the browser page host).
       if (pageIsHttps && (u.protocol === 'ws:' || u.protocol === 'http:')) {
-        return `wss://${window.location.host}`;
+        return `wss://${u.host}`;
+      }
+      if (pageIsHttps && u.protocol === 'https:') {
+        return `wss://${u.host}`;
+      }
+      if (!pageIsHttps && u.protocol === 'wss:') {
+        return `ws://${u.host}`;
       }
       return `${u.protocol}//${u.host}`;
     } catch {
-      return raw.replace(/\/$/, '');
+      return rawWs.replace(/\/$/, '');
     }
   }
+
+  // No WS env: derive gateway host from API URL (same as mobile app pattern).
+  if (typeof window !== 'undefined' && rawApi) {
+    const fromApi = apiUrlToWsOrigin(rawApi);
+    if (fromApi) {
+      if (pageIsHttps && fromApi.startsWith('ws://')) {
+        try {
+          const u = new URL(fromApi);
+          return `wss://${u.host}`;
+        } catch {
+          return fromApi.replace(/^ws:\/\//i, 'wss://');
+        }
+      }
+      return fromApi;
+    }
+  }
+
   if (typeof window === 'undefined') {
     return 'ws://localhost:8000';
   }

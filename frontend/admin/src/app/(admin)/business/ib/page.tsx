@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { Loader2, CheckCircle, XCircle, Users, RefreshCw } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Users, RefreshCw, Edit, Settings } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface IBApplication {
@@ -27,7 +27,22 @@ interface IBAgent {
   pending_payout: number;
   level: number;
   is_active: boolean;
+  commission_plan_id?: string;
+  custom_commission_per_lot?: number;
+  custom_commission_per_trade?: number;
   created_at: string;
+}
+
+interface CommissionPlan {
+  id: string;
+  name: string;
+  is_default: boolean;
+  commission_per_lot: number;
+  commission_per_trade: number;
+  spread_share_pct: number;
+  cpa_per_deposit: number;
+  mlm_levels: number;
+  mlm_distribution: number[];
 }
 
 type Tab = 'applications' | 'active';
@@ -43,6 +58,10 @@ export default function IBPage() {
   const [loading, setLoading] = useState(true);
   const [approveModal, setApproveModal] = useState<IBApplication | null>(null);
   const [rejectModal, setRejectModal] = useState<IBApplication | null>(null);
+  const [editCommissionModal, setEditCommissionModal] = useState<IBAgent | null>(null);
+  const [rejectAgentModal, setRejectAgentModal] = useState<IBAgent | null>(null);
+  const [commissionPlansModal, setCommissionPlansModal] = useState(false);
+  const [commissionPlans, setCommissionPlans] = useState<CommissionPlan[]>([]);
   const [commissionPlan, setCommissionPlan] = useState('default');
   const [customPerLot, setCustomPerLot] = useState('');
   const [customPerTrade, setCustomPerTrade] = useState('');
@@ -66,7 +85,17 @@ export default function IBPage() {
     }
   }, [tab]);
 
+  const fetchCommissionPlans = useCallback(async () => {
+    try {
+      const res = await adminApi.get<{ items: CommissionPlan[] }>('/business/ib/commission-plans');
+      setCommissionPlans(res.items || []);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to load commission plans');
+    }
+  }, []);
+
   useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchCommissionPlans(); }, [fetchCommissionPlans]);
 
   const handleApprove = async () => {
     if (!approveModal) return;
@@ -107,6 +136,48 @@ export default function IBPage() {
     }
   };
 
+  const handleEditCommission = async () => {
+    if (!editCommissionModal) return;
+    setSubmitting(true);
+    try {
+      const body: any = {};
+      if (commissionPlan === 'default' || commissionPlan) {
+        body.commission_plan_id = commissionPlan === 'default' ? null : commissionPlan;
+      }
+      if (commissionPlan === 'custom') {
+        if (customPerLot) body.custom_commission_per_lot = parseFloat(customPerLot);
+        if (customPerTrade) body.custom_commission_per_trade = parseFloat(customPerTrade);
+      }
+      await adminApi.put(`/business/ib/agents/${editCommissionModal.id}/commission`, body);
+      toast.success('Commission updated successfully');
+      setEditCommissionModal(null);
+      setCommissionPlan('default');
+      setCustomPerLot('');
+      setCustomPerTrade('');
+      fetchData();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to update commission');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRejectAgent = async () => {
+    if (!rejectAgentModal) return;
+    setSubmitting(true);
+    try {
+      await adminApi.post(`/business/ib/agents/${rejectAgentModal.id}/reject`, { reason: rejectReason });
+      toast.success('IB rejected successfully');
+      setRejectAgentModal(null);
+      setRejectReason('');
+      fetchData();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to reject IB');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <>
       <div className="p-6 space-y-4">
@@ -115,9 +186,15 @@ export default function IBPage() {
             <h1 className="text-lg font-semibold text-text-primary">IB Management</h1>
             <p className="text-xxs text-text-tertiary mt-0.5">Manage Introducing Broker applications and active agents</p>
           </div>
-          <button onClick={fetchData} className="p-1.5 rounded-md border border-border-primary text-text-secondary hover:bg-bg-hover transition-fast">
-            <RefreshCw size={14} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setCommissionPlansModal(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border-primary text-text-secondary hover:bg-bg-hover transition-fast">
+              <Settings size={14} />
+              Commission Plans
+            </button>
+            <button onClick={fetchData} className="p-1.5 rounded-md border border-border-primary text-text-secondary hover:bg-bg-hover transition-fast">
+              <RefreshCw size={14} />
+            </button>
+          </div>
         </div>
 
         <div className="bg-bg-secondary border border-border-primary rounded-md">
@@ -197,8 +274,8 @@ export default function IBPage() {
                   <table className="w-full min-w-[960px]">
                     <thead>
                       <tr className="border-b border-border-primary bg-bg-tertiary/40">
-                        {['Name', 'Referral Code', 'Level', 'Referrals', 'Total Earned', 'Pending', 'Joined'].map((col) => (
-                          <th key={col} className={cn('text-left px-4 py-2.5 text-xxs font-medium text-text-tertiary uppercase tracking-wide', ['Total Earned', 'Pending'].includes(col) && 'text-right')}>
+                        {['Name', 'Referral Code', 'Level', 'Referrals', 'Total Earned', 'Pending', 'Joined', 'Actions'].map((col) => (
+                          <th key={col} className={cn('text-left px-4 py-2.5 text-xxs font-medium text-text-tertiary uppercase tracking-wide', ['Total Earned', 'Pending'].includes(col) && 'text-right', col === 'Actions' && 'text-right')}>
                             {col}
                           </th>
                         ))}
@@ -220,6 +297,27 @@ export default function IBPage() {
                           <td className="px-4 py-2.5 text-xs text-success text-right font-mono tabular-nums">${formatMoney(agent.total_earned)}</td>
                           <td className="px-4 py-2.5 text-xs text-warning text-right font-mono tabular-nums">${formatMoney(agent.pending_payout)}</td>
                           <td className="px-4 py-2.5 text-xs text-text-tertiary">{agent.created_at ? new Date(agent.created_at).toLocaleDateString() : '—'}</td>
+                          <td className="px-4 py-2.5 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditCommissionModal(agent);
+                                  setCommissionPlan(agent.commission_plan_id || 'default');
+                                  setCustomPerLot(agent.custom_commission_per_lot?.toString() || '');
+                                  setCustomPerTrade(agent.custom_commission_per_trade?.toString() || '');
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xxs font-medium bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-fast"
+                              >
+                                <Edit size={12} /> Edit
+                              </button>
+                              <button
+                                onClick={() => setRejectAgentModal(agent)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xxs font-medium bg-danger/15 text-danger border border-danger/30 hover:bg-danger/25 transition-fast"
+                              >
+                                <XCircle size={12} /> Reject
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -288,6 +386,75 @@ export default function IBPage() {
               <button onClick={() => setRejectModal(null)} className="px-3 py-1.5 rounded-md text-xs text-text-secondary border border-border-primary hover:bg-bg-hover transition-fast">Cancel</button>
               <button onClick={handleReject} disabled={submitting || !rejectReason.trim()} className="px-3 py-1.5 rounded-md text-xs font-medium bg-danger/15 text-danger border border-danger/30 hover:bg-danger/25 transition-fast disabled:opacity-50">
                 {submitting ? 'Rejecting...' : 'Reject'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Commission Modal */}
+      {editCommissionModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setEditCommissionModal(null)}>
+          <div className="bg-bg-secondary border border-border-primary rounded-md shadow-modal w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-border-primary">
+              <h3 className="text-sm font-semibold text-text-primary">Edit IB Commission</h3>
+              <p className="text-xxs text-text-tertiary mt-0.5">{editCommissionModal.user_name} — {editCommissionModal.user_email}</p>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div>
+                <label className="block text-xxs text-text-tertiary mb-1">Commission Plan</label>
+                <select value={commissionPlan} onChange={(e) => setCommissionPlan(e.target.value)} className="w-full text-xs py-1.5 px-2 bg-bg-input border border-border-primary rounded-md">
+                  <option value="default">Default Plan</option>
+                  {commissionPlans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>{plan.name}</option>
+                  ))}
+                  <option value="custom">Custom Rates</option>
+                </select>
+              </div>
+              {commissionPlan === 'custom' && (
+                <>
+                  <div>
+                    <label className="block text-xxs text-text-tertiary mb-1">Custom Rate Per Lot ($)</label>
+                    <input type="number" step="0.01" value={customPerLot} onChange={(e) => setCustomPerLot(e.target.value)} placeholder="e.g. 5.00" className="w-full text-xs py-1.5 px-2 bg-bg-input border border-border-primary rounded-md" />
+                  </div>
+                  <div>
+                    <label className="block text-xxs text-text-tertiary mb-1">Custom Rate Per Trade ($)</label>
+                    <input type="number" step="0.01" value={customPerTrade} onChange={(e) => setCustomPerTrade(e.target.value)} placeholder="e.g. 2.00" className="w-full text-xs py-1.5 px-2 bg-bg-input border border-border-primary rounded-md" />
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-border-primary flex justify-end gap-2">
+              <button onClick={() => setEditCommissionModal(null)} className="px-3 py-1.5 rounded-md text-xs text-text-secondary border border-border-primary hover:bg-bg-hover transition-fast">Cancel</button>
+              <button onClick={handleEditCommission} disabled={submitting} className="px-3 py-1.5 rounded-md text-xs font-medium bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-fast disabled:opacity-50">
+                {submitting ? 'Updating...' : 'Update Commission'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Agent Modal */}
+      {rejectAgentModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setRejectAgentModal(null)}>
+          <div className="bg-bg-secondary border border-border-primary rounded-md shadow-modal w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-border-primary">
+              <h3 className="text-sm font-semibold text-text-primary">Reject Active IB</h3>
+              <p className="text-xxs text-text-tertiary mt-0.5">{rejectAgentModal.user_name} — {rejectAgentModal.user_email}</p>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div>
+                <label className="block text-xxs text-text-tertiary mb-1">Rejection Reason</label>
+                <textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3} placeholder="Provide a reason for rejecting this IB..." className="w-full text-xs py-1.5 px-2 bg-bg-input border border-border-primary rounded-md resize-none" />
+              </div>
+              <div className="bg-warning/10 border border-warning/30 rounded-md p-3">
+                <p className="text-xxs text-warning">⚠️ This will deactivate the IB and change their role back to regular user.</p>
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-border-primary flex justify-end gap-2">
+              <button onClick={() => setRejectAgentModal(null)} className="px-3 py-1.5 rounded-md text-xs text-text-secondary border border-border-primary hover:bg-bg-hover transition-fast">Cancel</button>
+              <button onClick={handleRejectAgent} disabled={submitting || !rejectReason.trim()} className="px-3 py-1.5 rounded-md text-xs font-medium bg-danger/15 text-danger border border-danger/30 hover:bg-danger/25 transition-fast disabled:opacity-50">
+                {submitting ? 'Rejecting...' : 'Reject IB'}
               </button>
             </div>
           </div>

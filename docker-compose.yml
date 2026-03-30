@@ -102,6 +102,9 @@ services:
     environment:
       # Override: shared backend/.env uses REDIS_URL for gateway (db 0); admin service must use db 1
       REDIS_URL: redis://redis:6379/1
+      DATABASE_URL: postgresql+asyncpg://protrader:protrader_dev@postgres:5432/protrader
+      ADMIN_JWT_SECRET: admin-secret-change-in-production
+      JWT_SECRET: dev-secret-change-in-production
     volumes:
       - ./backend/services/admin:/app
       - ./backend/packages/common:/app/packages/common

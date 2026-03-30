@@ -919,6 +919,9 @@ function BecomeProviderTab() {
 function MyDashboardTab() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showFollowers, setShowFollowers] = useState(false);
+  const [followers, setFollowers] = useState<any[]>([]);
+  const [followersLoading, setFollowersLoading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -929,6 +932,19 @@ function MyDashboardTab() {
     })();
   }, []);
 
+  const loadFollowers = async () => {
+    setFollowersLoading(true);
+    try {
+      const res = await api.get<any>('/followers/my-followers');
+      setFollowers(res.followers || []);
+      setShowFollowers(true);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to load followers');
+    } finally {
+      setFollowersLoading(false);
+    }
+  };
+
   if (loading) return <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-buy border-t-transparent rounded-full animate-spin" /></div>;
   if (!data || data.status !== 'approved') return <div className="text-center py-16 text-xs text-text-tertiary">You are not an approved signal provider. Apply in the "Become Provider" tab.</div>;
 
@@ -938,12 +954,16 @@ function MyDashboardTab() {
     <div className="space-y-4 max-w-3xl mx-auto">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Followers', value: String(data.followers_count || 0), color: 'text-buy' },
+          { label: 'Followers', value: String(data.followers_count || 0), color: 'text-buy', clickable: true, onClick: loadFollowers },
           { label: 'AUM', value: `$${fmt(data.total_aum || 0)}`, color: 'text-success' },
           { label: 'Your Earnings', value: `$${fmt(data.total_investor_profit ? data.total_investor_profit * (data.performance_fee_pct / 100) : 0)}`, color: 'text-warning' },
           { label: 'Total Trades', value: String(data.total_trades || 0), color: 'text-text-primary' },
         ].map(c => (
-          <div key={c.label} className="glass-card rounded-xl p-3 noise-texture">
+          <div 
+            key={c.label} 
+            onClick={c.clickable ? c.onClick : undefined}
+            className={clsx('glass-card rounded-xl p-3 noise-texture', c.clickable && 'cursor-pointer hover:ring-2 hover:ring-buy/30 transition-all')}
+          >
             <p className="text-xxs text-text-tertiary">{c.label}</p>
             <p className={clsx('text-lg font-bold font-mono tabular-nums mt-0.5', c.color)}>{c.value}</p>
           </div>
@@ -963,6 +983,74 @@ function MyDashboardTab() {
           <div><p className="text-text-tertiary">Status</p><p className="text-success capitalize">{data.status}</p></div>
         </div>
       </div>
+
+      {/* Followers Modal */}
+      {showFollowers && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowFollowers(false)}>
+          <div className="w-full max-w-4xl bg-bg-secondary border border-border-glass rounded-2xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border-glass bg-bg-tertiary/50">
+              <h3 className="text-base font-bold text-text-primary">My Followers ({followers.length})</h3>
+              <button onClick={() => setShowFollowers(false)} className="p-2 rounded-lg hover:bg-bg-hover transition-colors">
+                <svg className="w-5 h-5 text-text-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-5 max-h-[70vh] overflow-y-auto">
+              {followersLoading ? (
+                <div className="flex justify-center py-12">
+                  <div className="w-8 h-8 border-2 border-buy border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : followers.length === 0 ? (
+                <div className="text-center py-12 text-sm text-text-tertiary">No followers yet</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border-glass">
+                        <th className="text-left px-3 py-2 text-xxs font-semibold text-text-tertiary uppercase">Follower</th>
+                        <th className="text-left px-3 py-2 text-xxs font-semibold text-text-tertiary uppercase">Account</th>
+                        <th className="text-right px-3 py-2 text-xxs font-semibold text-text-tertiary uppercase">Investment</th>
+                        <th className="text-right px-3 py-2 text-xxs font-semibold text-text-tertiary uppercase">Profit/Loss</th>
+                        <th className="text-right px-3 py-2 text-xxs font-semibold text-text-tertiary uppercase">ROI %</th>
+                        <th className="text-right px-3 py-2 text-xxs font-semibold text-text-tertiary uppercase">Copied Trades</th>
+                        <th className="text-left px-3 py-2 text-xxs font-semibold text-text-tertiary uppercase">Joined</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {followers.map((f) => (
+                        <tr key={f.id} className="border-b border-border-glass/50 hover:bg-bg-hover/30 transition-colors">
+                          <td className="px-3 py-3">
+                            <div>
+                              <p className="text-xs font-medium text-text-primary">{f.user_name}</p>
+                              <p className="text-xxs text-text-tertiary">{f.user_email}</p>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 text-xs text-text-secondary font-mono">{f.account_number}</td>
+                          <td className="px-3 py-3 text-right text-xs font-mono text-text-primary">${f.allocation_amount.toLocaleString()}</td>
+                          <td className="px-3 py-3 text-right">
+                            <span className={clsx('text-xs font-mono font-bold', f.total_profit >= 0 ? 'text-buy' : 'text-sell')}>
+                              {f.total_profit >= 0 ? '+' : ''}${f.total_profit.toLocaleString()}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            <span className={clsx('text-xs font-mono font-bold', f.profit_pct >= 0 ? 'text-buy' : 'text-sell')}>
+                              {f.profit_pct >= 0 ? '+' : ''}{f.profit_pct}%
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-right text-xs text-text-primary font-mono">{f.total_copied_trades}</td>
+                          <td className="px-3 py-3 text-xxs text-text-tertiary">{new Date(f.joined_at).toLocaleDateString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

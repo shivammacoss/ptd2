@@ -438,12 +438,17 @@ class IBProfile(Base):
     parent_ib_id = Column(UUID(as_uuid=True), ForeignKey("ib_profiles.id"))
     level = Column(Integer, default=1)
     commission_plan_id = Column(UUID(as_uuid=True))
+    custom_commission_per_lot = Column(Numeric(18, 8))
+    custom_commission_per_trade = Column(Numeric(18, 8))
     total_earned = Column(Numeric(18, 8), default=0)
     pending_payout = Column(Numeric(18, 8), default=0)
     is_active = Column(Boolean, default=True)
+    rejection_reason = Column(Text)
+    rejected_at = Column(DateTime(timezone=True))
+    rejected_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
-    user = relationship("User", lazy="selectin")
+    user = relationship("User", foreign_keys=[user_id], lazy="selectin")
 
 
 class MasterAccount(Base):

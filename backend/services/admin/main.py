@@ -12,7 +12,7 @@ logger = logging.getLogger("uvicorn.error")
 from routes import (
     auth, dashboard, users, trades, deposits, banks,
     config as routes_config, instruments_admin, business, social, analytics, bonus, banners,
-    support, employees, settings, transactions,
+    support, employees, settings, transactions, kyc,
 )
 
 app_settings = get_settings()
@@ -76,6 +76,7 @@ app.include_router(support.router, prefix=prefix)
 app.include_router(employees.router, prefix=prefix)
 app.include_router(settings.router, prefix=prefix)
 app.include_router(transactions.router, prefix=prefix)
+app.include_router(kyc.router, prefix=prefix)
 
 
 @app.get("/health")

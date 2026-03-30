@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 from packages.common.src.database import get_db
 from packages.common.src.models import (
     TradingAccount, Position, PositionStatus, OrderSide,
-    TradeHistory, Instrument,
+    TradeHistory, Instrument, CopyTrade,
 )
 from packages.common.src.auth import get_current_user
 from packages.common.src.redis_client import redis_client, PriceChannel
@@ -353,6 +353,14 @@ async def trade_history(
     items = []
     for t in trades:
         side_val = t.side.value if hasattr(t.side, 'value') else str(t.side)
+        
+        # Check if this was a copy trade
+        copy_trade_q = await db.execute(
+            select(CopyTrade).where(CopyTrade.investor_position_id == t.position_id)
+        )
+        copy_trade = copy_trade_q.scalar_one_or_none()
+        trade_type = "copy_trade" if copy_trade else "self_trade"
+        
         items.append({
             "id": str(t.id),
             "symbol": t.instrument.symbol if t.instrument else None,
@@ -364,6 +372,7 @@ async def trade_history(
             "commission": float(t.commission),
             "pnl": float(t.profit),
             "close_reason": t.close_reason or "manual",
+            "trade_type": trade_type,
             "opened_at": t.opened_at.isoformat() if t.opened_at else None,
             "close_time": t.closed_at.isoformat() if t.closed_at else None,
         })

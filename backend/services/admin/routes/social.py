@@ -273,3 +273,51 @@ async def update_master_settings(
     )
     await db.commit()
     return {"message": "Master settings updated"}
+
+
+@router.delete("/masters/{master_id}")
+async def delete_master(
+    master_id: uuid.UUID,
+    request: Request,
+    admin: User = Depends(require_permission("social.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(MasterAccount).where(MasterAccount.id == master_id))
+    master = result.scalar_one_or_none()
+    if not master:
+        raise HTTPException(status_code=404, detail="Master not found")
+
+    # Check if there are active investors
+    active_inv_q = await db.execute(
+        select(func.count()).where(
+            InvestorAllocation.master_id == master_id,
+            InvestorAllocation.status == "active"
+        )
+    )
+    active_investors = active_inv_q.scalar() or 0
+    if active_investors > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete master with {active_investors} active investors. Please close all investor allocations first."
+        )
+
+    # Update user role back to regular user if they were master_trader
+    user_q = await db.execute(select(User).where(User.id == master.user_id))
+    user = user_q.scalar_one_or_none()
+    if user and user.role == "master_trader":
+        user.role = "user"
+
+    # Delete the master account
+    await db.delete(master)
+
+    await write_audit_log(
+        db, admin.id, "delete_master", "master_account", master_id,
+        old_values={
+            "user_id": str(master.user_id),
+            "master_type": master.master_type,
+            "status": master.status,
+        },
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    return {"message": "Master account deleted successfully"}

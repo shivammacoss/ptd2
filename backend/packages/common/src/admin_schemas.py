@@ -403,6 +403,9 @@ class IBProfileOut(BaseModel):
     referral_code: str
     parent_ib_id: Optional[str] = None
     level: int
+    commission_plan_id: Optional[str] = None
+    custom_commission_per_lot: Optional[float] = None
+    custom_commission_per_trade: Optional[float] = None
     total_earned: float
     pending_payout: float
     is_active: bool
@@ -413,6 +416,43 @@ class IBProfileOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class UpdateIBCommissionIn(BaseModel):
+    commission_plan_id: Optional[str] = None
+    custom_commission_per_lot: Optional[float] = None
+    custom_commission_per_trade: Optional[float] = None
+
+
+class RejectIBIn(BaseModel):
+    reason: str
+
+
+class IBCommissionPlanOut(BaseModel):
+    id: str
+    name: str
+    is_default: bool
+    commission_per_lot: float
+    commission_per_trade: float
+    spread_share_pct: float
+    cpa_per_deposit: float
+    mlm_levels: int
+    mlm_distribution: list
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class IBCommissionPlanIn(BaseModel):
+    name: str
+    is_default: bool = False
+    commission_per_lot: float = 0
+    commission_per_trade: float = 0
+    spread_share_pct: float = 0
+    cpa_per_deposit: float = 0
+    mlm_levels: int = 5
+    mlm_distribution: list = [40, 25, 15, 10, 10]
 
 
 class MLMConfigOut(BaseModel):

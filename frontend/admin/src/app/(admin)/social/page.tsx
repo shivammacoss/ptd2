@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { adminApi } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Check, ChevronDown, Edit3, Loader2, Users, X, DollarSign, TrendingUp } from 'lucide-react';
+import { Check, ChevronDown, Edit3, Loader2, Users, X, DollarSign, TrendingUp, Trash2 } from 'lucide-react';
 
 interface MasterRequest {
   id: string; user_id: string; user_email: string; user_name: string;
@@ -40,6 +40,8 @@ export default function SocialPage() {
   const [approveMaxInv, setApproveMaxInv] = useState('100');
   const [approveType, setApproveType] = useState('signal_provider');
   const [actionLoading, setActionLoading] = useState(false);
+  const [deleteModal, setDeleteModal] = useState<ActiveMaster | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -76,6 +78,17 @@ export default function SocialPage() {
       toast.success('Rejected');
       fetchData();
     } catch (e: any) { toast.error(e.message); }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteModal) return;
+    setDeleteLoading(true);
+    try {
+      await adminApi.delete(`/social/masters/${deleteModal.id}`);
+      toast.success('Master deleted successfully');
+      setDeleteModal(null);
+      fetchData();
+    } catch (e: any) { toast.error(e.message); } finally { setDeleteLoading(false); }
   };
 
   const totalAUM = masters.reduce((s, m) => s + m.aum, 0);
@@ -172,7 +185,7 @@ export default function SocialPage() {
               ) : (
                 <table className="w-full min-w-[1300px]">
                   <thead><tr className="border-b border-border-primary bg-bg-tertiary/40">
-                    {['Master', 'Type', 'Followers', 'AUM', 'Trades', 'Copy Trades', 'Live', 'P&L', 'Fee', 'Admin %', 'Earned', 'Admin Rev'].map(c => (
+                    {['Master', 'Type', 'Followers', 'AUM', 'Trades', 'Copy Trades', 'Live', 'P&L', 'Fee', 'Admin %', 'Earned', 'Admin Rev', 'Actions'].map(c => (
                       <th key={c} className={cn('text-left px-2 py-2.5 text-xxs font-medium text-text-tertiary uppercase tracking-wide', ['AUM', 'P&L', 'Earned', 'Admin Rev'].includes(c) && 'text-right')}>{c}</th>
                     ))}
                   </tr></thead>
@@ -193,6 +206,11 @@ export default function SocialPage() {
                         <td className="px-2 py-2 text-xs text-warning font-medium">{m.admin_commission_pct}%</td>
                         <td className="px-2 py-2 text-xs text-right font-mono tabular-nums text-text-primary">${fmt(m.master_earnings)}</td>
                         <td className="px-2 py-2 text-xs text-right font-mono tabular-nums text-warning font-medium">${fmt(m.admin_revenue)}</td>
+                        <td className="px-2 py-2">
+                          <button onClick={() => setDeleteModal(m)} className="px-2 py-1 text-xxs font-medium bg-danger/15 text-danger border border-danger/30 rounded hover:bg-danger/25 transition-fast inline-flex items-center gap-1">
+                            <Trash2 size={11} /> Delete
+                          </button>
+                        </td>
                       </tr>
                       );
                     })}
@@ -250,6 +268,39 @@ export default function SocialPage() {
               <button onClick={() => setApproveModal(null)} className="px-3 py-1.5 text-xs text-text-secondary border border-border-primary rounded-md hover:bg-bg-hover transition-fast">Cancel</button>
               <button onClick={handleApprove} disabled={actionLoading} className="px-3 py-1.5 text-xs font-medium text-white bg-success rounded-md hover:bg-success/80 disabled:opacity-50 transition-fast inline-flex items-center gap-1.5">
                 {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Approve Master
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete modal */}
+      {deleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md bg-bg-secondary border border-border-primary rounded-md shadow-modal animate-fade-in">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary">
+              <h2 className="text-sm font-semibold text-text-primary">Delete Master Account</h2>
+              <button onClick={() => setDeleteModal(null)} className="p-1 rounded-md text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-fast"><X size={16} /></button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div className="p-3 rounded-md bg-danger/10 border border-danger/20">
+                <p className="text-xs text-danger font-medium mb-1">⚠️ Warning: This action cannot be undone</p>
+                <p className="text-xxs text-text-secondary">Deleting this master account will remove all associated data and revoke master trader privileges.</p>
+              </div>
+              <div className="p-3 rounded-md bg-bg-tertiary border border-border-primary">
+                <p className="text-xs text-text-primary font-medium">{deleteModal.user_name}</p>
+                <p className="text-xxs text-text-tertiary">{deleteModal.user_email} · {deleteModal.account_number}</p>
+                <p className="text-xxs text-text-tertiary mt-1">Type: {deleteModal.master_type?.replace('_', ' ')} · Followers: {deleteModal.active_investors}/{deleteModal.max_investors}</p>
+                {deleteModal.active_investors > 0 && (
+                  <p className="text-xxs text-danger mt-2 font-medium">⚠️ This master has {deleteModal.active_investors} active investor(s). Please close all allocations first.</p>
+                )}
+              </div>
+              <p className="text-xxs text-text-tertiary">Are you sure you want to delete this master account?</p>
+            </div>
+            <div className="px-4 py-3 border-t border-border-primary flex justify-end gap-2">
+              <button onClick={() => setDeleteModal(null)} className="px-3 py-1.5 text-xs text-text-secondary border border-border-primary rounded-md hover:bg-bg-hover transition-fast">Cancel</button>
+              <button onClick={handleDelete} disabled={deleteLoading || deleteModal.active_investors > 0} className="px-3 py-1.5 text-xs font-medium text-white bg-danger rounded-md hover:bg-danger/80 disabled:opacity-50 transition-fast inline-flex items-center gap-1.5">
+                {deleteLoading ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} Delete Master
               </button>
             </div>
           </div>
