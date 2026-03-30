@@ -79,6 +79,7 @@ class User(Base):
 
     accounts = relationship("TradingAccount", back_populates="user", lazy="selectin")
     sessions = relationship("UserSession", back_populates="user")
+    ib_profile = relationship("IBProfile", foreign_keys="IBProfile.user_id", back_populates="user", uselist=False)
 
 
 class UserSession(Base):
@@ -448,7 +449,8 @@ class IBProfile(Base):
     rejected_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
-    user = relationship("User", foreign_keys=[user_id], lazy="selectin")
+    user = relationship("User", foreign_keys=[user_id], back_populates="ib_profile", lazy="selectin")
+    rejected_by_user = relationship("User", foreign_keys=[rejected_by], lazy="selectin")
 
 
 class MasterAccount(Base):
